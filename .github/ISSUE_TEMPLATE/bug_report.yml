@@ -1,0 +1,99 @@
+name: Bug Report
+description: 报告一个问题，帮助维护者按版本定位和修复
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你来反馈问题。这个公开仓现在按版本发布，请尽量提供你手头已有的信息，方便我按版本定位。
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我会尽量提供版本号、环境信息，以及触发方式或复现步骤
+          required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本号
+      description: 例如 v0.3.2；如果你是从源码运行，也请说明对应 tag、commit 或下载日期
+      placeholder: v0.3.2
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: 部署方式
+      options:
+        - Docker Compose
+        - 本地源码运行
+        - 公开实例 / 在线环境
+        - 其他
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: 系统环境
+      description: 例如 Ubuntu 24.04 / macOS 15 / Windows 11；如果暂时不确定，也可以写“大致环境”
+      placeholder: Ubuntu 24.04
+
+  - type: input
+    id: browser
+    attributes:
+      label: 浏览器（如果是 Web UI 问题）
+      placeholder: Chrome 134 / Safari 18 / Firefox 136
+
+  - type: textarea
+    id: frequency
+    attributes:
+      label: 出现频率 / 触发条件（可选）
+      description: 如果不是稳定复现，请描述大概频率、前置条件，或你怀疑相关的操作
+      placeholder: 偶发，大约 10 次里会出现 1 次；通常发生在连续点击继续生成之后
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / 触发方式
+      description: 能稳定复现最好；如果不能，也请描述你当时做了什么
+      placeholder: |
+        1. 启动服务
+        2. 导入示例数据
+        3. 打开章节编辑页
+        4. 点击继续生成
+        5. 出现报错
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果
+      placeholder: 应该正常生成续写内容
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+      placeholder: 返回 500，页面显示生成失败
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / 报错 / 截图
+      description: 有的话请粘贴关键日志、报错堆栈，或补充截图说明；没有也可以先留空
+      render: shell
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: 补充信息
+      description: 例如是否使用自定义模型、是否导入了特定 worldpack、是否只在某篇小说中出现
