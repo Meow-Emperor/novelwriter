@@ -102,13 +102,13 @@ def client(db, hosted_user):
 
 
 def test_generate_world_does_not_charge_quota_on_llm_unavailable_503(client, db, hosted_user, novel, monkeypatch):
-    from app.api import world
+    from app.core import world_generation_application as generation_app
     from app.core.ai_client import LLMUnavailableError
 
     before = hosted_user.generation_quota
 
     mock = AsyncMock(side_effect=LLMUnavailableError("boom"))
-    monkeypatch.setattr(world, "generate_world_drafts", mock)
+    monkeypatch.setattr(generation_app, "generate_world_drafts", mock)
 
     resp = client.post(f"/api/novels/{novel.id}/world/generate", json={"text": "这是一段足够长的世界观设定文本。"})
     assert resp.status_code == 503
@@ -118,24 +118,25 @@ def test_generate_world_does_not_charge_quota_on_llm_unavailable_503(client, db,
 
 
 def test_generate_world_does_not_charge_quota_on_busy_semaphore_503(client, db, hosted_user, novel, monkeypatch):
-    from app.api import world
+    from app.core import world_generation_application as generation_app
 
     before = hosted_user.generation_quota
 
     async def _busy() -> None:
         raise HTTPException(status_code=503, detail="busy", headers={"Retry-After": "1"})
 
-    monkeypatch.setattr(world, "acquire_llm_slot", _busy)
+    monkeypatch.setattr(generation_app, "acquire_llm_slot", _busy)
 
     resp = client.post(f"/api/novels/{novel.id}/world/generate", json={"text": "这是一段足够长的世界观设定文本。"})
     assert resp.status_code == 503
+    assert resp.headers["retry-after"] == "1"
 
     db.refresh(hosted_user)
     assert hosted_user.generation_quota == before
 
 
 def test_generate_world_charges_quota_on_success(client, db, hosted_user, novel, monkeypatch):
-    from app.api import world
+    from app.core import world_generation_application as generation_app
     from app.schemas import WorldGenerateResponse
 
     before = hosted_user.generation_quota
@@ -148,7 +149,7 @@ def test_generate_world_charges_quota_on_success(client, db, hosted_user, novel,
             warnings=[],
         )
     )
-    monkeypatch.setattr(world, "generate_world_drafts", mock)
+    monkeypatch.setattr(generation_app, "generate_world_drafts", mock)
 
     resp = client.post(f"/api/novels/{novel.id}/world/generate", json={"text": "这是一段足够长的世界观设定文本。"})
     assert resp.status_code == 200
@@ -159,8 +160,8 @@ def test_generate_world_charges_quota_on_success(client, db, hosted_user, novel,
 
 def test_generate_world_allows_byok_when_ai_budget_hard_stop_is_reached(client, db, hosted_user, novel, monkeypatch):
     import app.config as config_mod
-    from app.api import world
     from app.config import Settings
+    from app.core import world_generation_application as generation_app
     from app.schemas import WorldGenerateResponse
 
     prev = config_mod._settings_instance
@@ -189,7 +190,7 @@ def test_generate_world_allows_byok_when_ai_budget_hard_stop_is_reached(client, 
                 warnings=[],
             )
         )
-        monkeypatch.setattr(world, "generate_world_drafts", mock)
+        monkeypatch.setattr(generation_app, "generate_world_drafts", mock)
 
         resp = client.post(
             f"/api/novels/{novel.id}/world/generate",

@@ -21,6 +21,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.core.parser import parse_novel_file
+from app.core.worldpack_import import import_worldpack_payload
 from app.models import Chapter, Novel, User
 
 logger = logging.getLogger(__name__)
@@ -85,17 +86,11 @@ def seed_demo_novel(db: Session, user: User) -> int | None:
 
     # Import worldpack via the same logic as the API endpoint.
     try:
-        from app.api.world import import_worldpack_v1
         from app.schemas import WorldpackV1Payload
 
         raw = json.loads(DEMO_WORLDPACK.read_text(encoding="utf-8"))
         payload = WorldpackV1Payload(**raw)
-        import_worldpack_v1(
-            novel_id=novel.id,
-            body=payload,
-            db=db,
-            current_user=user,
-        )
+        import_worldpack_payload(novel_id=novel.id, body=payload, db=db)
     except Exception:
         logger.exception("seed_demo: worldpack import failed (novel %s)", novel.id)
     logger.info(

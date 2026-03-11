@@ -20,10 +20,10 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.core.ai_client import AIClient, StructuredOutputParseError, get_client
 from app.core.llm_semaphore import acquire_llm_slot_blocking, release_llm_slot
+from app.core.world_write import build_relationship_signature, relationship_signature_from_row
 from app.core.window_index import NovelIndex, WindowRef
 from app.database import SessionLocal
 from app.models import BootstrapJob, Chapter, Novel, WorldEntity, WorldRelationship
-from app.world_relationships import canonicalize_relationship_label
 
 try:
     import ahocorasick
@@ -111,6 +111,14 @@ class LegacyDraftAmbiguity:
 
     def has_any(self) -> bool:
         return bool(self.entity_ids or self.relationship_ids)
+
+
+@dataclass(slots=True)
+class BootstrapRunSummary:
+    novel_id: int
+    mode: str
+    entities_found: int
+    relationships_found: int
 
 
 class Tokenizer(Protocol):
@@ -762,11 +770,7 @@ def persist_bootstrap_output(
     # Relationships are bidirectional in the product semantics, so avoid duplicates
     # when the same (source, target, label_canonical) pair already exists in either direction.
     existing_relationship_keys = {
-        (
-            rel.source_id,
-            rel.target_id,
-            rel.label_canonical or canonicalize_relationship_label(rel.label),
-        )
+        relationship_signature_from_row(rel)
         for rel in db.query(WorldRelationship).filter(WorldRelationship.novel_id == novel_id).all()
     }
     relationships_written = 0
@@ -777,8 +781,6 @@ def persist_bootstrap_output(
         label = refined_relationship.label.strip()
         if not source_name or not target_name or not label or source_name == target_name:
             continue
-        label_canonical = canonicalize_relationship_label(label)
-
         source_id = entity_ids_by_name.get(source_name)
         target_id = entity_ids_by_name.get(target_name)
         if source_id is None:
@@ -790,8 +792,12 @@ def persist_bootstrap_output(
         if source_id is None or target_id is None:
             continue
 
-        direct_key = (source_id, target_id, label_canonical)
-        reverse_key = (target_id, source_id, label_canonical)
+        direct_key = build_relationship_signature(source_id=source_id, target_id=target_id, label=label)
+        reverse_key = build_relationship_signature(
+            source_id=target_id,
+            target_id=source_id,
+            label_canonical=direct_key[2],
+        )
         if direct_key in existing_relationship_keys or reverse_key in existing_relationship_keys:
             continue
 
@@ -832,7 +838,7 @@ async def run_bootstrap_job(
     client: AIClient | None = None,
     user_id: int | None = None,
     llm_config: dict | None = None,
-) -> None:
+) -> BootstrapRunSummary | None:
     make_session = session_factory or SessionLocal
     db = make_session()
     try:
@@ -946,15 +952,12 @@ async def run_bootstrap_job(
             },
         )
         db.commit()
-
-        # Record analytics event after successful bootstrap
-        from app.core.events import record_event
-        if user_id is not None:
-            record_event(db, user_id, "bootstrap_run", novel_id=job.novel_id, meta={
-                "mode": mode,
-                "entities_found": entities_found,
-                "relationships_found": relationships_found,
-            })
+        return BootstrapRunSummary(
+            novel_id=job.novel_id,
+            mode=mode,
+            entities_found=entities_found,
+            relationships_found=relationships_found,
+        )
     except Exception as exc:  # pragma: no cover - defensive background task guard
         db.rollback()
         logger.exception("bootstrap background task failed")

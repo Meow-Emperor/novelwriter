@@ -564,7 +564,7 @@ _SYSTEM_DATA_ADAPTERS: dict[SystemDisplayType, TypeAdapter] = {
 }
 
 
-def _normalize_and_validate_system_data(display_type: SystemDisplayType, data: Any) -> dict:
+def normalize_and_validate_system_data(display_type: SystemDisplayType, data: Any) -> dict:
     adapter = _SYSTEM_DATA_ADAPTERS.get(display_type)
     if adapter is None:
         # Defensive: DB rows may contain legacy/invalid display_type values.
@@ -588,7 +588,7 @@ class WorldSystemCreate(BaseModel):
 
     @model_validator(mode="after")
     def _validate_data(self) -> "WorldSystemCreate":
-        self.data = _normalize_and_validate_system_data(self.display_type, self.data)
+        self.data = normalize_and_validate_system_data(self.display_type, self.data)
         return self
 
 
@@ -787,7 +787,7 @@ class WorldpackV1System(BaseModel):
 
     @model_validator(mode="after")
     def _validate_data(self) -> "WorldpackV1System":
-        self.data = _normalize_and_validate_system_data(self.display_type, self.data)
+        self.data = normalize_and_validate_system_data(self.display_type, self.data)
         return self
 
 

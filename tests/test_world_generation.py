@@ -311,11 +311,11 @@ def test_generate_world_text_non_whitespace_too_short_422(client, novel):
 
 
 def test_generate_world_llm_unavailable_maps_to_503(client, novel, monkeypatch):
-    from app.api import world
+    from app.core import world_generation_application as generation_app
     from app.core.ai_client import LLMUnavailableError
 
     mock = AsyncMock(side_effect=LLMUnavailableError("boom"))
-    monkeypatch.setattr(world, "generate_world_drafts", mock)
+    monkeypatch.setattr(generation_app, "generate_world_drafts", mock)
 
     resp = client.post(f"/api/novels/{novel.id}/world/generate", json={"text": "这是一段足够长的世界观设定文本。"})
     assert resp.status_code == 503
@@ -324,11 +324,11 @@ def test_generate_world_llm_unavailable_maps_to_503(client, novel, monkeypatch):
 
 
 def test_generate_world_llm_schema_invalid_maps_to_502(client, novel, monkeypatch):
-    from app.api import world
+    from app.core import world_generation_application as generation_app
     from app.core.ai_client import StructuredOutputParseError
 
     mock = AsyncMock(side_effect=StructuredOutputParseError(max_retries=3))
-    monkeypatch.setattr(world, "generate_world_drafts", mock)
+    monkeypatch.setattr(generation_app, "generate_world_drafts", mock)
 
     resp = client.post(f"/api/novels/{novel.id}/world/generate", json={"text": "这是一段足够长的世界观设定文本。"})
     assert resp.status_code == 502
@@ -337,10 +337,10 @@ def test_generate_world_llm_schema_invalid_maps_to_502(client, novel, monkeypatc
 
 
 def test_generate_world_unexpected_error_maps_to_500(client, novel, monkeypatch):
-    from app.api import world
+    from app.core import world_generation_application as generation_app
 
     mock = AsyncMock(side_effect=RuntimeError("boom"))
-    monkeypatch.setattr(world, "generate_world_drafts", mock)
+    monkeypatch.setattr(generation_app, "generate_world_drafts", mock)
 
     resp = client.post(f"/api/novels/{novel.id}/world/generate", json={"text": "这是一段足够长的世界观设定文本。"})
     assert resp.status_code == 500
@@ -486,11 +486,11 @@ def test_generate_world_replaces_previous_worldgen_drafts(client, db, novel, mon
 
 
 def test_generate_world_db_conflict_maps_to_409(client, novel, monkeypatch):
-    from app.api import world
+    from app.core import world_generation_application as generation_app
     from sqlalchemy.exc import IntegrityError
 
     mock = AsyncMock(side_effect=IntegrityError("stmt", "params", Exception("orig")))
-    monkeypatch.setattr(world, "generate_world_drafts", mock)
+    monkeypatch.setattr(generation_app, "generate_world_drafts", mock)
 
     resp = client.post(f"/api/novels/{novel.id}/world/generate", json={"text": "这是一段足够长的世界观设定文本。"})
     assert resp.status_code == 409

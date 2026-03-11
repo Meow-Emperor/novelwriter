@@ -9,8 +9,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import StaticPool, create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.core.worldpack_import import (
+    UnsupportedWorldpackSchemaVersionError,
+    WorldpackNovelNotFoundError,
+    WorldpackImportResult,
+    import_worldpack_payload,
+)
 from app.database import Base, get_db
 from app.models import Novel, User, WorldEntity, WorldEntityAttribute, WorldRelationship, WorldSystem
+from app.schemas import WorldpackV1Payload
 
 
 engine = create_engine(
@@ -87,6 +94,36 @@ def test_schema_version_validation_400(client, novel):
     payload["schema_version"] = "worldpack.v0"
     resp = client.post(f"/api/novels/{novel.id}/world/worldpack/import", json=payload)
     assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "worldpack_unsupported_schema_version"
+
+
+def test_import_worldpack_payload_raises_domain_error_for_missing_novel(db):
+    payload = WorldpackV1Payload(**_base_payload(pack_id="pack-1"))
+
+    with pytest.raises(WorldpackNovelNotFoundError) as exc_info:
+        import_worldpack_payload(novel_id=9999, body=payload, db=db)
+
+    assert exc_info.value.code == "novel_not_found"
+
+
+def test_import_worldpack_payload_raises_domain_error_for_unsupported_schema(db, novel):
+    payload = WorldpackV1Payload(**{**_base_payload(pack_id="pack-1"), "schema_version": "worldpack.v0"})
+
+    with pytest.raises(UnsupportedWorldpackSchemaVersionError) as exc_info:
+        import_worldpack_payload(novel_id=novel.id, body=payload, db=db)
+
+    assert exc_info.value.code == "worldpack_unsupported_schema_version"
+
+
+def test_import_worldpack_payload_returns_core_result(db, novel):
+    payload = WorldpackV1Payload(**_base_payload(pack_id="pack-1"))
+
+    result = import_worldpack_payload(novel_id=novel.id, body=payload, db=db)
+
+    assert isinstance(result, WorldpackImportResult)
+    assert result.pack_id == "pack-1"
+    assert result.counts.entities_created == 0
+    assert result.warnings == []
 
 
 def test_relationship_missing_refs_warning(client, novel):
@@ -416,7 +453,17 @@ def test_missing_name_does_not_cause_partial_sync_deletions(client, novel, db):
     payload_v1 = _base_payload(
         pack_id="pack-1",
         entities=[
-            {"key": "e1", "name": "云澈", "entity_type": "Character", "description": "", "aliases": [], "attributes": []},
+            {
+                "key": "e1",
+                "name": "云澈",
+                "entity_type": "Character",
+                "description": "",
+                "aliases": [],
+                "attributes": [
+                    {"key": "修为", "surface": "真玄境"},
+                    {"key": "阵营", "surface": "流云城"},
+                ],
+            },
             {"key": "e2", "name": "千叶影儿", "entity_type": "Character", "description": "", "aliases": [], "attributes": []},
         ],
         relationships=[{"source_key": "e1", "target_key": "e2", "label": "同伴", "description": ""}],
@@ -435,8 +482,15 @@ def test_missing_name_does_not_cause_partial_sync_deletions(client, novel, db):
         pack_id="pack-1",
         entities=[
             # Invalid entity in payload: missing name. Import should keep existing entity to
-            # resolve relationships and avoid deleting existing worldpack rows.
-            {"key": "e1", "name": "", "entity_type": "Character", "description": "", "aliases": [], "attributes": []},
+            # resolve relationships and avoid mutating existing worldpack rows.
+            {
+                "key": "e1",
+                "name": "",
+                "entity_type": "Character",
+                "description": "",
+                "aliases": [],
+                "attributes": [{"key": "修为", "surface": "神元境"}],
+            },
             {"key": "e2", "name": "千叶影儿", "entity_type": "Character", "description": "", "aliases": [], "attributes": []},
         ],
         relationships=[{"source_key": "e1", "target_key": "e2", "label": "同伴", "description": ""}],
@@ -453,6 +507,17 @@ def test_missing_name_does_not_cause_partial_sync_deletions(client, novel, db):
     )
     assert rel2 is not None
     assert data["counts"]["relationships_deleted"] == 0
+
+    entity = db.query(WorldEntity).filter(WorldEntity.novel_id == novel.id, WorldEntity.worldpack_key == "e1").first()
+    attrs = (
+        db.query(WorldEntityAttribute)
+        .filter(WorldEntityAttribute.entity_id == entity.id)
+        .order_by(WorldEntityAttribute.key.asc())
+        .all()
+    )
+    assert {attr.key: attr.surface for attr in attrs} == {"修为": "真玄境", "阵营": "流云城"}
+    assert data["counts"]["attributes_updated"] == 0
+    assert data["counts"]["attributes_deleted"] == 0
 
     codes = {w["code"] for w in data["warnings"]}
     assert "missing_name_preserve_existing" in codes

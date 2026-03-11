@@ -45,42 +45,23 @@ def db():
 @pytest.fixture
 def client(db, monkeypatch):
     from app.api import world
+    from app.core import world_bootstrap_application as bootstrap_app
 
     captured: dict[str, object] = {}
 
-    def _capture_bootstrap_task(
-        job_id: int,
-        *,
-        session_factory=None,
-        client=None,
-        user_id: int | None = None,
-        llm_config: dict | None = None,
-    ):
+    def _capture_bootstrap_launch(*, db, job_id: int, user_id: int | None = None, llm_config: dict | None = None):
         # Hosted usage isolation depends on attributing bootstrap LLM calls to the trigger user.
+        _ = db
+        captured["job_id"] = job_id
         captured["user_id"] = user_id
         captured["llm_config"] = llm_config
-
-        async def _noop():
-            return None
-
-        return _noop()
-
-    def _drop_background_task(coro):
         assert captured.get("user_id") == 1
-        coro.close()
-
-        class _DoneTask:
-            def done(self):
-                return True
-
-        return _DoneTask()
-
-    monkeypatch.setattr(world, "run_bootstrap_job", _capture_bootstrap_task)
-    monkeypatch.setattr(world.asyncio, "create_task", _drop_background_task)
 
     test_app = FastAPI()
     test_app.include_router(world.router)
     test_app.state._bootstrap_task_capture = captured
+
+    monkeypatch.setattr(bootstrap_app, "launch_bootstrap_job", _capture_bootstrap_launch)
 
     def override_get_db():
         try:

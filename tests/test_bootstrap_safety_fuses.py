@@ -112,8 +112,8 @@ def test_bootstrap_rejects_when_ai_budget_hard_stop_is_reached(client, monkeypat
 
 def test_bootstrap_allows_byok_when_ai_budget_hard_stop_is_reached(client, monkeypatch):
     import app.config as config_mod
-    from app.api import world
     from app.config import Settings
+    from app.core import world_bootstrap_application as bootstrap_app
 
     c, db, user, novel = client
 
@@ -142,10 +142,10 @@ def test_bootstrap_allows_byok_when_ai_budget_hard_stop_is_reached(client, monke
         )
         db.commit()
 
-        async def fake_run_bootstrap_job(*args, **kwargs):
+        def fake_launch_bootstrap_job(*args, **kwargs):
             return None
 
-        monkeypatch.setattr(world, "run_bootstrap_job", fake_run_bootstrap_job)
+        monkeypatch.setattr(bootstrap_app, "launch_bootstrap_job", fake_launch_bootstrap_job)
 
         before = user.generation_quota
         resp = c.post(

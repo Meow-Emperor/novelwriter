@@ -14,15 +14,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.ai_client import ai_client
+from app.core.world_write import build_relationship_signature, normalize_system_data_for_write
 from app.config import get_settings
 from app.models import WorldEntity, WorldRelationship, WorldSystem
 from app.schemas import (
     WorldGenerateResponse,
     WorldGenerateWarning,
-    _normalize_and_validate_system_data,
 )
 from app.utils.prompts import WORLD_GENERATION_PROMPT, WORLD_GENERATION_SYSTEM_PROMPT
-from app.world_relationships import canonicalize_relationship_label
 
 logger = logging.getLogger(__name__)
 
@@ -400,10 +399,14 @@ async def generate_world_drafts(
         ):
             if src_id is None or tgt_id is None:
                 continue
-            lc = _norm(str(label_canonical or ""))
-            if not lc:
+            signature = build_relationship_signature(
+                source_id=int(src_id),
+                target_id=int(tgt_id),
+                label_canonical=str(label_canonical or ""),
+            )
+            if not signature[2]:
                 continue
-            relationship_keys_seen.add((int(src_id), int(tgt_id), lc))
+            relationship_keys_seen.add(signature)
 
         entities_created = 0
         relationships_created = 0
@@ -476,8 +479,11 @@ async def generate_world_drafts(
                 )
                 continue
 
-            label_canonical = canonicalize_relationship_label(label)
-            rel_key = (int(src_id), int(tgt_id), label_canonical)
+            rel_key = build_relationship_signature(
+                source_id=int(src_id),
+                target_id=int(tgt_id),
+                label=label,
+            )
             if rel_key in relationship_keys_seen:
                 warnings.append(
                     WorldGenerateWarning(
@@ -553,7 +559,7 @@ async def generate_world_drafts(
                     }
                 )
             data = {"items": items_payload} if items_payload else {}
-            data = _normalize_and_validate_system_data("list", data)
+            data = normalize_system_data_for_write("list", data)
 
             constraints = []
             seen_constraints: set[str] = set()

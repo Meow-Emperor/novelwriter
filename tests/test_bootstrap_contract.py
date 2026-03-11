@@ -41,21 +41,12 @@ def db():
 @pytest.fixture
 def world_api(monkeypatch):
     from app.api import world
+    from app.core import world_bootstrap_application as bootstrap_app
 
-    async def _noop_bootstrap_job(*args, **kwargs):
+    def _noop_launch_bootstrap_job(*args, **kwargs):
         return None
 
-    def _drop_background_task(coro):
-        coro.close()
-
-        class _DoneTask:
-            def done(self):
-                return True
-
-        return _DoneTask()
-
-    monkeypatch.setattr(world, "run_bootstrap_job", _noop_bootstrap_job)
-    monkeypatch.setattr(world.asyncio, "create_task", _drop_background_task)
+    monkeypatch.setattr(bootstrap_app, "launch_bootstrap_job", _noop_launch_bootstrap_job)
     return world
 
 
