@@ -148,6 +148,11 @@ class TestUploadNovel:
         assert novel.author == "A"
         assert novel.language == "zh"
         assert novel.owner_id == user.id
+        assert novel.window_index_status == "fresh"
+        assert novel.window_index_revision == 1
+        assert novel.window_index_built_revision == 1
+        assert novel.window_index is not None
+        assert novel.window_index_error is None
 
         # File path is persisted and should point into the isolated upload dir.
         assert novel.file_path

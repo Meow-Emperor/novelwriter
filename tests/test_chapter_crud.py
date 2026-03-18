@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import StaticPool, create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.core.indexing import mark_window_index_build_failed, mark_window_index_build_succeeded
 from app.database import Base, get_db
 from app.models import Chapter, Novel
 
@@ -193,3 +194,77 @@ class TestDeleteChapter:
     def test_delete_chapter_not_found(self, client, novel):
         resp = client.delete(f"/api/novels/{novel.id}/chapters/99")
         assert resp.status_code == 404
+
+
+class TestWindowIndexLifecycle:
+    def _seed_fresh_index(self, db, novel):
+        mark_window_index_build_succeeded(
+            novel,
+            index_payload=b"old-index",
+            revision=1,
+        )
+        db.commit()
+
+    def test_create_chapter_rebuilds_window_index(self, client, db, novel):
+        self._seed_fresh_index(db, novel)
+
+        resp = client.post(
+            f"/api/novels/{novel.id}/chapters",
+            json={"chapter_number": 3, "title": "第三章", "content": "Alice met Bob again."},
+        )
+
+        assert resp.status_code == 201
+        db.refresh(novel)
+        assert novel.window_index_status == "fresh"
+        assert novel.window_index_revision == 2
+        assert novel.window_index_built_revision == 2
+        assert novel.window_index is not None
+        assert novel.window_index != b"old-index"
+        assert novel.window_index_error is None
+
+    def test_update_chapter_background_failure_marks_window_index_failed(self, client, db, novel, monkeypatch):
+        from app.api import novels as novels_api
+
+        self._seed_fresh_index(db, novel)
+
+        def _fail_rebuild(novel_id, *, session_factory, settings=None):
+            error_db = session_factory()
+            try:
+                current = error_db.get(Novel, novel_id)
+                assert current is not None
+                mark_window_index_build_failed(
+                    current,
+                    error="窗口索引重建失败，请稍后重试",
+                    revision=int(current.window_index_revision or 0),
+                )
+                error_db.commit()
+            finally:
+                error_db.close()
+
+        monkeypatch.setattr(novels_api, "run_window_index_rebuild_for_latest_revision", _fail_rebuild)
+
+        resp = client.put(
+            f"/api/novels/{novel.id}/chapters/1",
+            json={"content": "更新后的内容"},
+        )
+
+        assert resp.status_code == 200
+        db.refresh(novel)
+        assert novel.window_index_status == "failed"
+        assert novel.window_index_revision == 2
+        assert novel.window_index_built_revision == 1
+        assert novel.window_index is None
+        assert novel.window_index_error == "窗口索引重建失败，请稍后重试"
+
+    def test_delete_chapter_rebuilds_window_index(self, client, db, novel):
+        self._seed_fresh_index(db, novel)
+
+        resp = client.delete(f"/api/novels/{novel.id}/chapters/2")
+
+        assert resp.status_code == 204
+        db.refresh(novel)
+        assert novel.window_index_status == "fresh"
+        assert novel.window_index_revision == 2
+        assert novel.window_index_built_revision == 2
+        assert novel.window_index is not None
+        assert novel.window_index_error is None

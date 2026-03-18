@@ -31,12 +31,18 @@ class Novel(Base):
     title = Column(String(255), nullable=False)
     author = Column(String(255), default="")
     # IMPORTANT: If Novel.language is ever mutated after creation, you MUST call
-    # invalidate_novel_language_caches(db, novel_id) from app.core.cache to rebuild
-    # the lore automaton and window index (both depend on language).
+    # invalidate_novel_language_caches(db, novel_id) from app.core.cache and
+    # commit the transaction. That helper invalidates the lore automaton cache
+    # and advances the window-index revision contract because tokenizer inputs
+    # depend on language.
     language = Column(String(50), nullable=False, default=DEFAULT_LANGUAGE)
     file_path = Column(String(512), nullable=False)
     total_chapters = Column(Integer, default=0)
     window_index = Column(LargeBinary, nullable=True)
+    window_index_status = Column(String(20), nullable=False, default="missing")
+    window_index_revision = Column(Integer, nullable=False, default=0)
+    window_index_built_revision = Column(Integer, nullable=True)
+    window_index_error = Column(Text, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

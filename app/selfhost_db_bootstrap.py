@@ -47,7 +47,15 @@ _LEGACY_TABLES = {
     "plot_beats",
 }
 _REQUIRED_SCHEMA_COLUMNS: dict[str, set[str]] = {
-    "novels": {"owner_id", "window_index", "language"},
+    "novels": {
+        "owner_id",
+        "window_index",
+        "language",
+        "window_index_status",
+        "window_index_revision",
+        "window_index_built_revision",
+        "window_index_error",
+    },
     "world_entities": {"origin", "worldpack_pack_id", "worldpack_key"},
     "world_entity_attributes": {"surface", "origin", "worldpack_pack_id"},
     "world_relationships": {"origin", "worldpack_pack_id", "label_canonical"},
@@ -60,7 +68,13 @@ _UNVERSIONED_AUTO_UPGRADE_BASELINES: tuple[tuple[str, dict[str, set[str]]], ...]
     (
         _PRE_NOVEL_LANGUAGE_REVISION,
         {
-            "novels": {"language"},
+            "novels": {
+                "language",
+                "window_index_status",
+                "window_index_revision",
+                "window_index_built_revision",
+                "window_index_error",
+            },
         },
     ),
 )

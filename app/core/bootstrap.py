@@ -15,14 +15,12 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.core.ai_client import AIClient, StructuredOutputParseError, get_client
-from app.core.indexing.builder import (
-    ChapterText,
-    build_window_index,
-    compute_cooccurrence,
-    extract_candidates,
-    load_common_words,
-    tokenize_text,
+from app.core.indexing.lifecycle import (
+    mark_window_index_build_failed,
+    mark_window_index_build_succeeded,
+    resolve_window_index_target_revision,
 )
+from app.core.indexing.rebuild import build_window_index_artifacts, load_chapter_texts
 from app.core.llm_semaphore import acquire_llm_slot_blocking, release_llm_slot
 from app.core.text import PromptKey, get_prompt
 from app.core.world.write import (
@@ -431,7 +429,6 @@ def persist_bootstrap_output(
     db: Session,
     *,
     novel_id: int,
-    index: NovelIndex,
     refinement: BootstrapRefinementResult,
     mode: str,
     draft_policy: str | None,
@@ -440,7 +437,6 @@ def persist_bootstrap_output(
     if novel is None:
         raise ValueError(f"Novel not found: {novel_id}")
 
-    novel.window_index = index.to_msgpack()
     if mode == BOOTSTRAP_MODE_INDEX_REFRESH:
         db.flush()
         return 0, 0
@@ -560,20 +556,6 @@ def persist_bootstrap_output(
     return entities_written, relationships_written
 
 
-def _load_chapters(db: Session, novel_id: int) -> list[ChapterText]:
-    rows = (
-        db.query(Chapter.id, Chapter.content)
-        .filter(Chapter.novel_id == novel_id)
-        .order_by(Chapter.chapter_number.asc())
-        .all()
-    )
-    return [
-        ChapterText(chapter_id=chapter_id, text=content or "")
-        for chapter_id, content in rows
-        if (content or "").strip()
-    ]
-
-
 async def run_bootstrap_job(
     job_id: int,
     *,
@@ -584,6 +566,8 @@ async def run_bootstrap_job(
 ) -> BootstrapRunSummary | None:
     make_session = session_factory or SessionLocal
     db = make_session()
+    index_persisted = False
+    target_index_revision = 0
     try:
         job = db.query(BootstrapJob).filter(BootstrapJob.id == job_id).first()
         if not job:
@@ -602,9 +586,13 @@ async def run_bootstrap_job(
         job.draft_policy = draft_policy
 
         settings = get_settings()
-        chapters = _load_chapters(db, job.novel_id)
+        chapters = load_chapter_texts(db, job.novel_id)
         if not chapters:
             raise ValueError("Novel has no non-empty chapter text to bootstrap")
+        target_index_revision = resolve_window_index_target_revision(
+            novel,
+            has_source_text=True,
+        )
 
         combined_text = "\n".join(chapter.text for chapter in chapters)
         logger.info(
@@ -618,56 +606,35 @@ async def run_bootstrap_job(
         db.commit()
 
         t0 = time.monotonic()
-        language, tokens = tokenize_text(
-            combined_text, language=getattr(novel, "language", None)
+        artifacts = build_window_index_artifacts(
+            chapters,
+            novel_language=getattr(novel, "language", None),
+            settings=settings,
+            include_cooccurrence=mode != BOOTSTRAP_MODE_INDEX_REFRESH,
         )
-        common_words = load_common_words(
-            language,
-            common_words_dir=settings.bootstrap_common_words_dir,
-        )
+        artifact_build_seconds = time.monotonic() - t0
         logger.info(
-            "bootstrap[%d]: tokenized in %.1fs → %d tokens (%s)",
+            "bootstrap[%d]: prepared index artifacts in %.1fs → %d tokens, %d candidates, %d important (%s)",
             job_id,
-            time.monotonic() - t0,
-            len(tokens),
-            language,
+            artifact_build_seconds,
+            len(artifacts.tokens),
+            len(artifacts.candidates),
+            len(artifacts.importance),
+            artifacts.language,
         )
 
         transition_bootstrap_job(
-            job, "extracting", detail=f"extracting candidates ({language})"
+            job, "extracting", detail=f"extracting candidates ({artifacts.language})"
         )
         db.commit()
-
-        t0 = time.monotonic()
-        candidates = extract_candidates(tokens, common_words, language=language)
-        logger.info(
-            "bootstrap[%d]: extracted %d candidates in %.1fs",
-            job_id,
-            len(candidates),
-            time.monotonic() - t0,
-        )
 
         transition_bootstrap_job(job, "windowing", detail="building window index")
         db.commit()
 
-        t0 = time.monotonic()
-        index, importance = build_window_index(
-            chapters,
-            candidates,
-            window_size=settings.bootstrap_window_size,
-            window_step=settings.bootstrap_window_step,
-            min_window_count=settings.bootstrap_min_window_count,
-            min_window_ratio=settings.bootstrap_min_window_ratio,
-        )
-        cooccurrence_pairs = (
-            compute_cooccurrence(index) if mode != BOOTSTRAP_MODE_INDEX_REFRESH else []
-        )
         logger.info(
-            "bootstrap[%d]: windowed in %.1fs → %d important, %d cooccurrence pairs (%s)",
+            "bootstrap[%d]: built window index → %d cooccurrence pairs (%s)",
             job_id,
-            time.monotonic() - t0,
-            len(importance),
-            len(cooccurrence_pairs),
+            len(artifacts.cooccurrence_pairs),
             mode,
         )
 
@@ -681,14 +648,22 @@ async def run_bootstrap_job(
             )
         db.commit()
 
+        mark_window_index_build_succeeded(
+            novel,
+            index_payload=artifacts.index.to_msgpack(),
+            revision=target_index_revision,
+        )
+        db.commit()
+        index_persisted = True
+
         if mode == BOOTSTRAP_MODE_INDEX_REFRESH:
             refinement = BootstrapRefinementResult()
         else:
             await acquire_llm_slot_blocking()
             try:
                 refinement = await refine_candidates_with_llm(
-                    importance,
-                    cooccurrence_pairs,
+                    artifacts.importance,
+                    artifacts.cooccurrence_pairs,
                     max_candidates=settings.bootstrap_max_candidates,
                     temperature=settings.bootstrap_llm_temperature,
                     client=client,
@@ -702,7 +677,6 @@ async def run_bootstrap_job(
         entities_found, relationships_found = persist_bootstrap_output(
             db,
             novel_id=job.novel_id,
-            index=index,
             refinement=refinement,
             mode=mode,
             draft_policy=draft_policy,
@@ -732,6 +706,15 @@ async def run_bootstrap_job(
         logger.exception("bootstrap background task failed")
         user_error, error_key = _sanitize_bootstrap_error(exc)
         try:
+            failed_novel = db.query(Novel).filter(Novel.id == getattr(job, "novel_id", None)).first()
+            if failed_novel is not None and not index_persisted:
+                current_revision = int(getattr(failed_novel, "window_index_revision", 0) or 0)
+                if current_revision <= target_index_revision:
+                    mark_window_index_build_failed(
+                        failed_novel,
+                        error=user_error,
+                        revision=max(target_index_revision, current_revision, 1),
+                    )
             failed_job = (
                 db.query(BootstrapJob).filter(BootstrapJob.id == job_id).first()
             )

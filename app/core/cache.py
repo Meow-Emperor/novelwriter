@@ -51,10 +51,14 @@ def invalidate_novel_language_caches(db, novel_id: int) -> None:
 
     Must be called whenever Novel.language is mutated. This ensures:
     - Lore automaton is rebuilt (keyword language may change)
-    - Window index is rebuilt (tokenizer depends on language)
+    - Window index revision is invalidated (tokenizer depends on language)
+
+    Caller must commit the surrounding transaction and schedule a rebuild if
+    they want the index refreshed immediately.
     """
     cache_manager.invalidate_novel(novel_id)
     from app.models import Novel
+    from app.core.indexing.lifecycle import mark_window_index_inputs_changed
     novel = db.query(Novel).filter(Novel.id == novel_id).first()
     if novel is not None:
-        novel.window_index = None
+        mark_window_index_inputs_changed(novel)

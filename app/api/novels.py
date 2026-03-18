@@ -3,12 +3,12 @@
 
 from dataclasses import dataclass
 
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Request, Response, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile, File, Form, HTTPException, Request, Response, Query
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 import sqlalchemy as sa
 from sqlalchemy.exc import DBAPIError, IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from pathlib import Path
 from typing import Any, List
 import json
@@ -47,6 +47,10 @@ from app.core.continuation_text import (
 )
 from app.core.generator import continue_novel, continue_novel_stream
 from app.core.chapter_numbering import get_next_missing_chapter_number
+from app.core.indexing.lifecycle import (
+    mark_window_index_inputs_changed,
+    run_window_index_rebuild_for_latest_revision,
+)
 from app.config import get_settings, resolve_context_chapters
 from app.core.auth import (
     get_current_user_or_default,
@@ -132,6 +136,26 @@ def _resolve_upload_language(file_path: Path, *, requested_language: str | None)
         None,
         sample_text=novel_text,
         default=DEFAULT_LANGUAGE,
+    )
+
+
+def _schedule_window_index_rebuild(
+    background_tasks: BackgroundTasks,
+    *,
+    db: Session,
+    novel_id: int,
+) -> None:
+    bind = db.get_bind()
+    engine = getattr(bind, "engine", bind)
+    background_session_factory = sessionmaker(
+        bind=engine,
+        autocommit=False,
+        autoflush=False,
+    )
+    background_tasks.add_task(
+        run_window_index_rebuild_for_latest_revision,
+        novel_id,
+        session_factory=background_session_factory,
     )
 
 
@@ -282,6 +306,7 @@ def _prepare_continuation_context(
 
 @router.post("/upload", response_model=UploadResponse)
 async def upload_novel(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     title: str = Form(...),
     author: str = Form(""),
@@ -380,7 +405,13 @@ async def upload_novel(
         )
         db.add(chapter)
 
+    mark_window_index_inputs_changed(novel)
     db.commit()
+    _schedule_window_index_rebuild(
+        background_tasks,
+        db=db,
+        novel_id=novel.id,
+    )
 
     record_event(
         db,
@@ -507,6 +538,7 @@ def get_chapter(
 def create_chapter(
     novel_id: int,
     req: ChapterCreateRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_or_default),
 ):
@@ -531,9 +563,8 @@ def create_chapter(
             db.add(chapter)
             try:
                 db.flush()  # surface unique constraint failures before commit
-                db.query(Novel).filter(Novel.id == novel_id).update(
-                    {Novel.total_chapters: Novel.total_chapters + 1}
-                )
+                novel.total_chapters = int(novel.total_chapters or 0) + 1
+                mark_window_index_inputs_changed(novel)
                 db.commit()
             except IntegrityError:
                 db.rollback()
@@ -542,6 +573,7 @@ def create_chapter(
                     db.expunge(chapter)
                 except Exception:
                     pass
+                db.refresh(novel)
                 if attempt < 2:
                     continue
                 raise HTTPException(
@@ -550,6 +582,11 @@ def create_chapter(
                 )
 
             db.refresh(chapter)
+            _schedule_window_index_rebuild(
+                background_tasks,
+                db=db,
+                novel_id=novel_id,
+            )
             return chapter
 
         # Unreachable; loop always returns or raises.
@@ -574,15 +611,19 @@ def create_chapter(
     db.add(chapter)
     try:
         db.flush()
-        db.query(Novel).filter(Novel.id == novel_id).update(
-            {Novel.total_chapters: Novel.total_chapters + 1}
-        )
+        novel.total_chapters = int(novel.total_chapters or 0) + 1
+        mark_window_index_inputs_changed(novel)
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail=f"Chapter {chapter_number} already exists")
 
     db.refresh(chapter)
+    _schedule_window_index_rebuild(
+        background_tasks,
+        db=db,
+        novel_id=novel_id,
+    )
     return chapter
 
 
@@ -591,6 +632,7 @@ def update_chapter(
     novel_id: int,
     chapter_number: int,
     req: ChapterUpdateRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_or_default),
 ):
@@ -616,8 +658,14 @@ def update_chapter(
         chapter.title = req.title
     if req.content is not None:
         chapter.content = req.content
+    mark_window_index_inputs_changed(novel)
     db.commit()
     db.refresh(chapter)
+    _schedule_window_index_rebuild(
+        background_tasks,
+        db=db,
+        novel_id=novel_id,
+    )
     record_event(db, current_user.id, "chapter_save", novel_id=novel_id, meta={"chapter": chapter_number})
     return chapter
 
@@ -626,6 +674,7 @@ def update_chapter(
 def delete_chapter(
     novel_id: int,
     chapter_number: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_or_default),
 ):
@@ -645,10 +694,14 @@ def delete_chapter(
         )
 
     db.delete(chapter)
-    db.query(Novel).filter(Novel.id == novel_id).update(
-        {Novel.total_chapters: Novel.total_chapters - 1}
-    )
+    novel.total_chapters = max(int(novel.total_chapters or 0) - 1, 0)
+    mark_window_index_inputs_changed(novel)
     db.commit()
+    _schedule_window_index_rebuild(
+        background_tasks,
+        db=db,
+        novel_id=novel_id,
+    )
     return Response(status_code=204)
 
 

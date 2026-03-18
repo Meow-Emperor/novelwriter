@@ -278,8 +278,13 @@ async def test_run_bootstrap_job_captures_non_parse_failure(db):
 
     db.expire_all()
     refreshed_job = db.query(BootstrapJob).filter(BootstrapJob.id == job.id).first()
+    refreshed_novel = db.query(Novel).filter(Novel.id == novel.id).first()
     assert refreshed_job.status == "failed"
     assert "引导扫描失败，请稍后重试" in (refreshed_job.error or "")
+    assert refreshed_novel.window_index_status == "fresh"
+    assert refreshed_novel.window_index_revision == 1
+    assert refreshed_novel.window_index_built_revision == 1
+    assert refreshed_novel.window_index is not None
 
 
 @pytest.mark.asyncio
@@ -308,8 +313,13 @@ async def test_run_bootstrap_job_captures_parse_failure(db):
 
     db.expire_all()
     refreshed_job = db.query(BootstrapJob).filter(BootstrapJob.id == job.id).first()
+    refreshed_novel = db.query(Novel).filter(Novel.id == novel.id).first()
     assert refreshed_job.status == "failed"
     assert "AI 输出解析失败，请重试" in (refreshed_job.error or "")
+    assert refreshed_novel.window_index_status == "fresh"
+    assert refreshed_novel.window_index_revision == 1
+    assert refreshed_novel.window_index_built_revision == 1
+    assert refreshed_novel.window_index is not None
 
 
 @pytest.mark.asyncio
