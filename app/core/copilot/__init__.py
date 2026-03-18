@@ -99,7 +99,21 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "ApplyResult",
     "CopilotError",
+    "CopilotFocusVariant",
+    "CopilotRuntimeProfile",
+    "EvidencePack",
     "apply_suggestions",
+    "derive_runtime_profile",
+    "dismiss_suggestions",
+    "_deduplicate_packs",
+    "_find_from_chapters",
+    "_find_from_draft_auditors",
+    "_find_from_window_index",
+    "_find_from_world_rows",
+    "_make_pack_id",
+    "_tool_find",
+    "_tool_open",
+    "_tool_read",
 ]
 
 # ---------------------------------------------------------------------------
@@ -918,7 +932,7 @@ async def execute_copilot_run(
         ):
             logger.warning("Skipping result persistence for run %s after lease loss", run_id)
 
-    except Exception as exc:
+    except Exception:
         logger.exception("Copilot run %s failed", run_id)
         try:
             err_db = SessionLocal()
