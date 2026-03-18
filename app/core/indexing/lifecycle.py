@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Iterable, Mapping
 
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from app.core.derived_assets import (
     DerivedAssetPersistResult,
     enqueue_derived_asset_job,
     inspect_derived_asset_job,
+    inspect_derived_asset_jobs,
     run_derived_asset_job_until_idle,
 )
 from app.config import Settings, get_settings
@@ -127,6 +128,95 @@ def mark_window_index_build_failed(
 class WindowIndexBuildOutput:
     asset_state: str
     index_payload: bytes | None = None
+
+
+@dataclass(slots=True)
+class WindowIndexLifecycleSnapshot:
+    status: str
+    revision: int
+    built_revision: int | None
+    error: str | None
+    has_payload: bool
+    job: DerivedAssetJobSnapshot | None = None
+
+
+def inspect_window_index_lifecycle(
+    novel: Novel,
+    *,
+    db: Session | None = None,
+    has_payload_override: bool | None = None,
+) -> WindowIndexLifecycleSnapshot:
+    job_snapshot = None
+    novel_id = getattr(novel, "id", None)
+    if db is not None and isinstance(novel_id, int):
+        job_snapshot = inspect_window_index_rebuild_job(db, novel_id=novel_id)
+    return _build_window_index_lifecycle_snapshot(
+        novel,
+        job_snapshot=job_snapshot,
+        has_payload_override=has_payload_override,
+    )
+
+
+def _build_window_index_lifecycle_snapshot(
+    novel: Novel,
+    *,
+    job_snapshot: DerivedAssetJobSnapshot | None = None,
+    has_payload_override: bool | None = None,
+) -> WindowIndexLifecycleSnapshot:
+    has_payload = (
+        bool(has_payload_override)
+        if has_payload_override is not None
+        else bool(getattr(novel, "window_index", None))
+    )
+    built_revision = getattr(novel, "window_index_built_revision", None)
+    normalized_status = normalize_window_index_status(
+        getattr(novel, "window_index_status", None),
+        has_payload=has_payload,
+    )
+    return WindowIndexLifecycleSnapshot(
+        status=normalized_status,
+        revision=int(getattr(novel, "window_index_revision", 0) or 0),
+        built_revision=int(built_revision) if built_revision is not None else None,
+        error=getattr(novel, "window_index_error", None),
+        has_payload=has_payload,
+        job=job_snapshot,
+    )
+
+
+def inspect_window_index_lifecycles(
+    novels: Iterable[Novel],
+    *,
+    db: Session | None = None,
+    has_payload_overrides: Mapping[int, bool] | None = None,
+) -> dict[int, WindowIndexLifecycleSnapshot]:
+    novel_list = list(novels)
+    if not novel_list:
+        return {}
+
+    job_snapshots: dict[int, DerivedAssetJobSnapshot] = {}
+    if db is not None:
+        job_snapshots = inspect_window_index_rebuild_jobs(
+            db,
+            novel_ids=[
+                novel_id
+                for novel in novel_list
+                if isinstance((novel_id := getattr(novel, "id", None)), int)
+            ],
+        )
+
+    return {
+        novel_id: _build_window_index_lifecycle_snapshot(
+            novel,
+            job_snapshot=job_snapshots.get(novel_id),
+            has_payload_override=(
+                bool(has_payload_overrides[novel_id])
+                if has_payload_overrides is not None and novel_id in has_payload_overrides
+                else None
+            ),
+        )
+        for novel in novel_list
+        if isinstance((novel_id := getattr(novel, "id", None)), int)
+    }
 
 
 class _WindowIndexJobAdapter:
@@ -261,6 +351,18 @@ def inspect_window_index_rebuild_job(
     return inspect_derived_asset_job(
         db,
         novel_id=novel_id,
+        asset_kind=DERIVED_ASSET_KIND_WINDOW_INDEX,
+    )
+
+
+def inspect_window_index_rebuild_jobs(
+    db: Session,
+    *,
+    novel_ids: Iterable[int],
+) -> dict[int, DerivedAssetJobSnapshot]:
+    return inspect_derived_asset_jobs(
+        db,
+        novel_ids=novel_ids,
         asset_kind=DERIVED_ASSET_KIND_WINDOW_INDEX,
     )
 

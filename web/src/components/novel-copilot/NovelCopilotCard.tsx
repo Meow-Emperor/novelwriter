@@ -6,6 +6,8 @@ import { useState } from 'react'
 import { useNovelCopilot } from './NovelCopilotContext'
 import { useOptionalNovelShell } from '@/components/novel-shell/NovelShellContext'
 import { buildWholeBookCopilotLaunchArgs } from './novelCopilotLauncher'
+import { useNovelWindowIndex } from '@/hooks/novel/useNovelWindowIndex'
+import { getWindowIndexCopilotStatusMeta } from '@/lib/windowIndexStatus'
 import {
   copilotHighlightLineClassName,
   copilotPanelClassName,
@@ -25,7 +27,12 @@ export function NovelCopilotCard({
   const [genOpen, setGenOpen] = useState(false)
   const copilot = useNovelCopilot()
   const shell = useOptionalNovelShell()
+  const { data: indexState } = useNovelWindowIndex(novelId)
   const compact = variant === 'compact'
+  const indexStatusMeta = getWindowIndexCopilotStatusMeta(indexState)
+  const indexStatusClassName = indexStatusMeta.tone === 'warning'
+    ? 'text-[hsl(var(--color-warning))]'
+    : 'text-muted-foreground/72'
 
   return (
     <div className={cn('space-y-3', className)} data-testid="world-build-panel">
@@ -49,6 +56,9 @@ export function NovelCopilotCard({
                     从全书视角检索设定缺口、潜在线索与值得进一步研究的世界锚点。
                   </div>
                 ) : null}
+                <div className={`mt-1 text-[10px] ${indexStatusClassName}`}>
+                  {indexStatusMeta.text}
+                </div>
               </div>
               <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium text-muted-foreground', copilotPillClassName)}>
                 全书探索

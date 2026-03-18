@@ -32,10 +32,40 @@ class NovelCreate(NovelBase):
 class NovelResponse(NovelBase):
     id: int
     total_chapters: int
+    window_index: "WindowIndexStateResponse"
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class WindowIndexLifecycleStatus(str, Enum):
+    MISSING = "missing"
+    STALE = "stale"
+    FRESH = "fresh"
+    FAILED = "failed"
+
+
+class DerivedAssetJobStatus(str, Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class WindowIndexJobResponse(BaseModel):
+    status: DerivedAssetJobStatus
+    target_revision: int
+    completed_revision: int | None = None
+    error: str | None = None
+
+
+class WindowIndexStateResponse(BaseModel):
+    status: WindowIndexLifecycleStatus
+    revision: int = 0
+    built_revision: int | None = None
+    error: str | None = None
+    job: WindowIndexJobResponse | None = None
 
 
 class ChapterResponse(BaseModel):

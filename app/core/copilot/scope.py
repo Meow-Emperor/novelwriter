@@ -11,6 +11,14 @@ from typing import Any, Literal
 
 from sqlalchemy.orm import Session
 
+from app.core.indexing import (
+    WINDOW_INDEX_STATUS_FAILED,
+    WINDOW_INDEX_STATUS_FRESH,
+    WINDOW_INDEX_STATUS_MISSING,
+    WINDOW_INDEX_STATUS_STALE,
+    WindowIndexLifecycleSnapshot,
+    inspect_window_index_lifecycle,
+)
 from app.models import (
     Chapter,
     Novel,
@@ -49,6 +57,7 @@ class ScopeSnapshot:
     profile: str = "broad_exploration"
     focus_variant: str = "whole_book"
     focus_entity_id: int | None = None
+    window_index_state: WindowIndexLifecycleSnapshot | None = None
 
 
 @dataclass
@@ -118,6 +127,7 @@ def _build_scope_snapshot(
     relationships: list[WorldRelationship],
     systems: list[WorldSystem],
     attributes_by_entity: dict[int, list[WorldEntityAttribute]],
+    window_index_state: WindowIndexLifecycleSnapshot,
 ) -> ScopeSnapshot:
     entities_by_id = {entity.id: entity for entity in entities}
     return ScopeSnapshot(
@@ -134,6 +144,7 @@ def _build_scope_snapshot(
         profile=profile,
         focus_variant=focus_variant,
         focus_entity_id=focus_entity_id,
+        window_index_state=window_index_state,
     )
 
 
@@ -142,6 +153,7 @@ def _load_broad_exploration_snapshot(
     novel: Novel,
     *,
     focus_variant: CopilotFocusVariant,
+    window_index_state: WindowIndexLifecycleSnapshot,
 ) -> ScopeSnapshot:
     novel_id = novel.id
     entities = (
@@ -172,6 +184,7 @@ def _load_broad_exploration_snapshot(
         relationships=relationships,
         systems=systems,
         attributes_by_entity=attributes_by_entity,
+        window_index_state=window_index_state,
     )
 
 
@@ -181,6 +194,7 @@ def _load_focused_research_snapshot(
     *,
     focus_variant: CopilotFocusVariant,
     focus_entity_id: int | None,
+    window_index_state: WindowIndexLifecycleSnapshot,
 ) -> ScopeSnapshot:
     novel_id = novel.id
     entity_query = db.query(WorldEntity).filter(WorldEntity.novel_id == novel_id)
@@ -224,10 +238,16 @@ def _load_focused_research_snapshot(
         relationships=relationships,
         systems=[],
         attributes_by_entity=attributes_by_entity,
+        window_index_state=window_index_state,
     )
 
 
-def _load_draft_governance_snapshot(db: Session, novel: Novel) -> ScopeSnapshot:
+def _load_draft_governance_snapshot(
+    db: Session,
+    novel: Novel,
+    *,
+    window_index_state: WindowIndexLifecycleSnapshot,
+) -> ScopeSnapshot:
     novel_id = novel.id
     draft_entities = (
         db.query(WorldEntity)
@@ -270,6 +290,7 @@ def _load_draft_governance_snapshot(db: Session, novel: Novel) -> ScopeSnapshot:
         relationships=draft_relationships,
         systems=draft_systems,
         attributes_by_entity=attributes_by_entity,
+        window_index_state=window_index_state,
     )
 
 
@@ -277,20 +298,27 @@ def load_scope_snapshot(db: Session, novel: Novel, mode: str, scope: str, contex
     """Load world-model state relevant to the current copilot scope."""
     profile = derive_runtime_profile(mode, scope, context)
     focus_variant = derive_focus_variant(mode, scope, context)
+    window_index_state = inspect_window_index_lifecycle(novel, db=db)
     focus_entity_id = (context or {}).get("entity_id")
     if not isinstance(focus_entity_id, int):
         focus_entity_id = None
 
     if profile == "draft_governance":
-        return _load_draft_governance_snapshot(db, novel)
+        return _load_draft_governance_snapshot(db, novel, window_index_state=window_index_state)
     if profile == "focused_research":
         return _load_focused_research_snapshot(
             db,
             novel,
             focus_variant=focus_variant,
             focus_entity_id=focus_entity_id,
+            window_index_state=window_index_state,
         )
-    return _load_broad_exploration_snapshot(db, novel, focus_variant=focus_variant)
+    return _load_broad_exploration_snapshot(
+        db,
+        novel,
+        focus_variant=focus_variant,
+        window_index_state=window_index_state,
+    )
 
 
 def gather_evidence(db: Session, novel: Novel, snapshot: ScopeSnapshot, context: dict | None) -> list[EvidenceItem]:
@@ -319,7 +347,15 @@ def _gather_chapter_evidence(
     """Gather chapter excerpts from window index or tail chapters."""
     from app.core.indexing.window_index import NovelIndex
 
-    if context and context.get("entity_id") and novel.window_index:
+    lifecycle = snapshot.window_index_state
+    use_window_index = bool(
+        lifecycle
+        and lifecycle.status == WINDOW_INDEX_STATUS_FRESH
+        and lifecycle.has_payload
+        and novel.window_index
+    )
+
+    if context and context.get("entity_id") and use_window_index:
         entity = snapshot.entities_by_id.get(context["entity_id"])
         if entity:
             try:
@@ -349,6 +385,13 @@ def _gather_chapter_evidence(
                 logger.debug("Window index load failed, falling back to tail chapters", exc_info=True)
 
     if len(items) < 3 and snapshot.focus_variant != "whole_book":
+        fallback_reason = "最近章节上下文"
+        if lifecycle and lifecycle.status == WINDOW_INDEX_STATUS_STALE:
+            fallback_reason = "检索索引待刷新，先回退到最近章节上下文"
+        elif lifecycle and lifecycle.status == WINDOW_INDEX_STATUS_MISSING:
+            fallback_reason = "检索索引尚未就绪，先回退到最近章节上下文"
+        elif lifecycle and lifecycle.status == WINDOW_INDEX_STATUS_FAILED:
+            fallback_reason = "检索索引构建失败，先回退到最近章节上下文"
         chapters = (
             db.query(Chapter)
             .filter(Chapter.novel_id == novel.id)
@@ -376,7 +419,7 @@ def _gather_chapter_evidence(
                 },
                 title=f"第{chapter.chapter_number}章 · 尾部",
                 excerpt=text[:MAX_CHAPTER_EXCERPT_CHARS],
-                why_relevant="最近章节上下文",
+                why_relevant=fallback_reason,
             ))
 
 

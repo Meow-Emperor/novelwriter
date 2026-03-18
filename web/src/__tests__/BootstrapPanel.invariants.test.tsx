@@ -5,14 +5,19 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
 import { BootstrapPanel } from '@/components/world-model/shared/BootstrapPanel'
 import { ToastProvider } from '@/components/world-model/shared/Toast'
-import type { BootstrapJobResponse } from '@/types/api'
+import type { BootstrapJobResponse, WindowIndexState } from '@/types/api'
 
 const mockUseBootstrapStatus = vi.fn()
 const mockUseTriggerBootstrap = vi.fn()
+const mockUseNovelWindowIndex = vi.fn()
 
 vi.mock('@/hooks/world/useBootstrap', () => ({
   useBootstrapStatus: (...args: unknown[]) => mockUseBootstrapStatus(...args),
   useTriggerBootstrap: (...args: unknown[]) => mockUseTriggerBootstrap(...args),
+}))
+
+vi.mock('@/hooks/novel/useNovelWindowIndex', () => ({
+  useNovelWindowIndex: (...args: unknown[]) => mockUseNovelWindowIndex(...args),
 }))
 
 const baseJob: BootstrapJobResponse = {
@@ -26,6 +31,14 @@ const baseJob: BootstrapJobResponse = {
   error: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
+}
+
+const freshIndexState: WindowIndexState = {
+  status: 'fresh',
+  revision: 2,
+  built_revision: 2,
+  error: null,
+  job: null,
 }
 
 function renderPanel() {
@@ -45,6 +58,7 @@ describe('BootstrapPanel invariants', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     mockUseTriggerBootstrap.mockReturnValue({ mutate: mutateFn, isPending: false })
+    mockUseNovelWindowIndex.mockReturnValue({ data: freshIndexState })
   })
 
   it('BI-03 first-run primary CTA should be extraction, not index maintenance', () => {

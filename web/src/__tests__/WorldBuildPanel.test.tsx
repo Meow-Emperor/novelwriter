@@ -6,10 +6,11 @@ import { createElement } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { ToastProvider } from '@/components/world-model/shared/Toast'
 import { WorldBuildPanel } from '@/components/world-model/shared/WorldBuildPanel'
-import type { BootstrapJobResponse } from '@/types/api'
+import type { BootstrapJobResponse, WindowIndexState } from '@/types/api'
 
 const mockUseBootstrapStatus = vi.fn()
 const mockUseTriggerBootstrap = vi.fn()
+const mockUseNovelWindowIndex = vi.fn()
 const mockUseWorldEntities = vi.fn()
 const mockUseWorldRelationships = vi.fn()
 const mockUseWorldSystems = vi.fn()
@@ -23,6 +24,10 @@ const mockUseUpdateSystem = vi.fn()
 vi.mock('@/hooks/world/useBootstrap', () => ({
   useBootstrapStatus: (...args: unknown[]) => mockUseBootstrapStatus(...args),
   useTriggerBootstrap: (...args: unknown[]) => mockUseTriggerBootstrap(...args),
+}))
+
+vi.mock('@/hooks/novel/useNovelWindowIndex', () => ({
+  useNovelWindowIndex: (...args: unknown[]) => mockUseNovelWindowIndex(...args),
 }))
 
 vi.mock('@/hooks/world/useEntities', () => ({
@@ -56,6 +61,14 @@ const baseJob: BootstrapJobResponse = {
   updated_at: '2026-01-01T00:00:00Z',
 }
 
+const freshIndexState: WindowIndexState = {
+  status: 'fresh',
+  revision: 2,
+  built_revision: 2,
+  error: null,
+  job: null,
+}
+
 function renderSection() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
@@ -77,6 +90,9 @@ describe('WorldBuildPanel', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     mockUseTriggerBootstrap.mockReturnValue({ mutate: mutateFn, isPending: false })
+    mockUseNovelWindowIndex.mockReturnValue({
+      data: { status: 'missing', revision: 0, built_revision: null, error: null, job: null },
+    })
     const mutateAsync = vi.fn().mockResolvedValue({})
     mockUseWorldEntities.mockReturnValue({ data: [] })
     mockUseWorldRelationships.mockReturnValue({ data: [] })
@@ -98,6 +114,7 @@ describe('WorldBuildPanel', () => {
     expect(screen.getByText('从章节提取')).toBeTruthy()
     expect(screen.getByTestId('novel-copilot-trigger')).toBeTruthy()
     expect(screen.getByText('从全书视角检索设定缺口、潜在线索与值得进一步研究的世界锚点。')).toBeTruthy()
+    expect(screen.getByText('检索索引尚未就绪；当前会先回退到最近章节。')).toBeTruthy()
 
     // Running
     mockUseBootstrapStatus.mockReturnValue({
@@ -119,6 +136,7 @@ describe('WorldBuildPanel', () => {
 
     // Completed
     mockUseBootstrapStatus.mockReturnValue({ data: baseJob, isLoading: false })
+    mockUseNovelWindowIndex.mockReturnValue({ data: freshIndexState })
     rerender(
       createElement(
         MemoryRouter,

@@ -13,6 +13,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.indexing import WINDOW_INDEX_STATUS_FRESH
 from app.core.copilot.scope import ScopeSnapshot
 from app.core.copilot.workspace import EvidencePack, Workspace, make_pack_id
 from app.language_policy import get_language_policy
@@ -377,7 +378,13 @@ def _find_from_window_index(
 ) -> list[EvidencePack]:
     from app.core.indexing.window_index import NovelIndex
 
-    if not novel.window_index:
+    lifecycle = snapshot.window_index_state
+    if not (
+        lifecycle
+        and lifecycle.status == WINDOW_INDEX_STATUS_FRESH
+        and lifecycle.has_payload
+        and novel.window_index
+    ):
         return []
 
     query_terms = _extract_query_terms(query, novel.language or snapshot.novel_language)

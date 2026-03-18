@@ -1,0 +1,13 @@
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/services/api'
+import type { Novel, WindowIndexState } from '@/types/api'
+import { novelKeys } from './keys'
+
+export function useNovelWindowIndex(novelId: number) {
+  return useQuery<Novel, Error, WindowIndexState | null>({
+    queryKey: novelKeys.detail(novelId),
+    queryFn: () => api.getNovel(novelId),
+    select: (novel) => novel.window_index ?? null,
+    enabled: Number.isFinite(novelId) && novelId > 0,
+  })
+}

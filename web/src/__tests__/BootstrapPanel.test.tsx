@@ -5,15 +5,20 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
 import { BootstrapPanel } from '@/components/world-model/shared/BootstrapPanel'
 import { ToastProvider } from '@/components/world-model/shared/Toast'
-import type { BootstrapJobResponse } from '@/types/api'
+import type { BootstrapJobResponse, WindowIndexState } from '@/types/api'
 
 // Mock the hooks
 const mockUseBootstrapStatus = vi.fn()
 const mockUseTriggerBootstrap = vi.fn()
+const mockUseNovelWindowIndex = vi.fn()
 
 vi.mock('@/hooks/world/useBootstrap', () => ({
   useBootstrapStatus: (...args: unknown[]) => mockUseBootstrapStatus(...args),
   useTriggerBootstrap: (...args: unknown[]) => mockUseTriggerBootstrap(...args),
+}))
+
+vi.mock('@/hooks/novel/useNovelWindowIndex', () => ({
+  useNovelWindowIndex: (...args: unknown[]) => mockUseNovelWindowIndex(...args),
 }))
 
 const baseJob: BootstrapJobResponse = {
@@ -27,6 +32,14 @@ const baseJob: BootstrapJobResponse = {
   error: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
+}
+
+const freshIndexState: WindowIndexState = {
+  status: 'fresh',
+  revision: 2,
+  built_revision: 2,
+  error: null,
+  job: null,
 }
 
 function renderPanel() {
@@ -46,6 +59,7 @@ describe('BootstrapPanel (sidebar variant)', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     mockUseTriggerBootstrap.mockReturnValue({ mutate: mutateFn, isPending: false })
+    mockUseNovelWindowIndex.mockReturnValue({ data: freshIndexState })
   })
 
   it('renders skeleton while loading', () => {
@@ -56,8 +70,12 @@ describe('BootstrapPanel (sidebar variant)', () => {
 
   it('renders idle action row when no job exists', () => {
     mockUseBootstrapStatus.mockReturnValue({ data: null, isLoading: false })
+    mockUseNovelWindowIndex.mockReturnValue({
+      data: { status: 'missing', revision: 0, built_revision: null, error: null, job: null },
+    })
     renderPanel()
     expect(screen.getByText('从章节提取')).toBeTruthy()
+    expect(screen.getByText('检索索引尚未就绪')).toBeTruthy()
   })
 
   it('renders completed state with compact summary', () => {
@@ -65,6 +83,7 @@ describe('BootstrapPanel (sidebar variant)', () => {
     renderPanel()
     expect(screen.getByText('从章节提取')).toBeTruthy()
     expect(screen.getByText('10 实体 · 5 关系')).toBeTruthy()
+    expect(screen.getByText('检索索引已就绪')).toBeTruthy()
   })
 
   it('uses legacy fallback and shows completed row when initialized field is missing', () => {
@@ -86,15 +105,19 @@ describe('BootstrapPanel (sidebar variant)', () => {
     }
     mockUseBootstrapStatus.mockReturnValue({ data: refreshOnlyJob, isLoading: false })
     renderPanel()
-    expect(screen.getByText('索引已刷新')).toBeTruthy()
+    expect(screen.getByText('检索索引已刷新')).toBeTruthy()
   })
 
   it('renders failed state with retry hint', () => {
     const failedJob = { ...baseJob, status: 'failed' as const, error: 'timeout' }
+    mockUseNovelWindowIndex.mockReturnValue({
+      data: { status: 'failed', revision: 2, built_revision: 1, error: 'timeout', job: null },
+    })
     mockUseBootstrapStatus.mockReturnValue({ data: failedJob, isLoading: false })
     renderPanel()
     expect(screen.getByText(/执行失败/)).toBeTruthy()
     expect(screen.getByText(/重试/)).toBeTruthy()
+    expect(screen.getByText('检索索引刷新失败')).toBeTruthy()
   })
 
   it('renders running state with progress bar and step label', () => {
@@ -117,9 +140,9 @@ describe('BootstrapPanel (sidebar variant)', () => {
     renderPanel()
 
     await userEvent.click(screen.getByText('从章节提取'))
-    expect(screen.getByText('危险操作：重提取实体关系')).toBeTruthy()
+    expect(screen.getByText('危险操作：重新提取章节草稿')).toBeTruthy()
 
-    await userEvent.click(screen.getByText('确认重提取'))
+    await userEvent.click(screen.getByText('确认重新提取'))
     expect(mutateFn).toHaveBeenCalledWith(
       { mode: 'reextract', draft_policy: 'replace_bootstrap_drafts', force: true },
       expect.any(Object)

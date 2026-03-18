@@ -4,8 +4,27 @@ export interface Novel {
   author: string
   language: string
   total_chapters: number
+  window_index?: WindowIndexState
   created_at: string
   updated_at: string
+}
+
+export type WindowIndexLifecycleStatus = 'missing' | 'stale' | 'fresh' | 'failed'
+export type DerivedAssetJobStatus = 'queued' | 'running' | 'completed' | 'failed'
+
+export interface WindowIndexJob {
+  status: DerivedAssetJobStatus
+  target_revision: number
+  completed_revision: number | null
+  error: string | null
+}
+
+export interface WindowIndexState {
+  status: WindowIndexLifecycleStatus
+  revision: number
+  built_revision: number | null
+  error: string | null
+  job: WindowIndexJob | null
 }
 
 export interface ChapterMeta {

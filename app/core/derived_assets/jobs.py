@@ -7,7 +7,7 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Protocol
+from typing import Any, Callable, Iterable, Protocol
 
 from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
@@ -150,6 +150,36 @@ def inspect_derived_asset_job(
     if job is None:
         return None
     return serialize_derived_asset_job(job)
+
+
+def inspect_derived_asset_jobs(
+    db: Session,
+    *,
+    novel_ids: Iterable[int],
+    asset_kind: str,
+) -> dict[int, DerivedAssetJobSnapshot]:
+    normalized_novel_ids = sorted(
+        {
+            int(novel_id)
+            for novel_id in novel_ids
+            if isinstance(novel_id, int) and novel_id > 0
+        }
+    )
+    if not normalized_novel_ids:
+        return {}
+
+    jobs = (
+        db.query(DerivedAssetJob)
+        .filter(
+            DerivedAssetJob.novel_id.in_(normalized_novel_ids),
+            DerivedAssetJob.asset_kind == asset_kind,
+        )
+        .all()
+    )
+    return {
+        int(job.novel_id): serialize_derived_asset_job(job)
+        for job in jobs
+    }
 
 
 def is_active_derived_asset_job_status(status: str | None) -> bool:

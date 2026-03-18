@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 import sqlalchemy as sa
 from sqlalchemy.exc import DBAPIError, IntegrityError
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session, defer, sessionmaker
 from pathlib import Path
 from typing import Any, List
 import json
@@ -25,6 +25,7 @@ from app.models import (
 )
 from app.schemas import (
     NovelResponse,
+    DerivedAssetJobStatus,
     ChapterResponse,
     ChapterMetaResponse,
     ChapterCreateRequest,
@@ -34,6 +35,9 @@ from app.schemas import (
     ContinueRequest,
     ContinueResponse,
     UploadResponse,
+    WindowIndexJobResponse,
+    WindowIndexLifecycleStatus,
+    WindowIndexStateResponse,
 )
 from app.core.parser import parse_novel_file, read_novel_file_text
 from app.core.llm_request import get_llm_config
@@ -48,7 +52,10 @@ from app.core.continuation_text import (
 from app.core.generator import continue_novel, continue_novel_stream
 from app.core.chapter_numbering import get_next_missing_chapter_number
 from app.core.indexing.lifecycle import (
+    WindowIndexLifecycleSnapshot,
     enqueue_window_index_rebuild_job,
+    inspect_window_index_lifecycle,
+    inspect_window_index_lifecycles,
     mark_window_index_inputs_changed,
     run_window_index_rebuild_for_latest_revision,
 )
@@ -182,6 +189,47 @@ def _verify_novel_access(novel: Novel | None, user: User) -> Novel:
         # Hosted mode must not leak existence across users.
         raise HTTPException(status_code=404, detail="Novel not found")
     return novel
+
+
+def _novel_window_index_presence_column():
+    return Novel.window_index.is_not(None).label("has_window_index_payload")
+
+
+def _serialize_novel(
+    novel: Novel,
+    *,
+    db: Session | None = None,
+    index_state: WindowIndexLifecycleSnapshot | None = None,
+) -> NovelResponse:
+    resolved_index_state = index_state
+    if resolved_index_state is None:
+        if db is None:
+            raise ValueError("db is required when index_state is not provided")
+        resolved_index_state = inspect_window_index_lifecycle(novel, db=db)
+    job_response = None
+    if resolved_index_state.job is not None:
+        job_response = WindowIndexJobResponse(
+            status=DerivedAssetJobStatus(resolved_index_state.job.status),
+            target_revision=resolved_index_state.job.target_revision,
+            completed_revision=resolved_index_state.job.completed_revision,
+            error=resolved_index_state.job.error,
+        )
+    return NovelResponse(
+        id=novel.id,
+        title=novel.title,
+        author=novel.author,
+        language=novel.language,
+        total_chapters=novel.total_chapters,
+        window_index=WindowIndexStateResponse(
+            status=WindowIndexLifecycleStatus(resolved_index_state.status),
+            revision=resolved_index_state.revision,
+            built_revision=resolved_index_state.built_revision,
+            error=resolved_index_state.error,
+            job=job_response,
+        ),
+        created_at=novel.created_at,
+        updated_at=novel.updated_at,
+    )
 
 
 def _build_continue_debug_summary(writer_ctx: dict[str, Any], context_chapters: int) -> ContinueDebugSummary:
@@ -442,16 +490,50 @@ async def upload_novel(
 @router.get("", response_model=List[NovelResponse])
 def list_novels(db: Session = Depends(get_db), current_user: User = Depends(get_current_user_or_default)):
     """List all novels for the current user."""
-    novels = _user_novels(db, current_user).order_by(Novel.created_at.desc()).all()
-    return novels
+    rows = (
+        _user_novels(db, current_user)
+        .options(defer(Novel.window_index))
+        .add_columns(_novel_window_index_presence_column())
+        .order_by(Novel.created_at.desc())
+        .all()
+    )
+    novels = [novel for novel, _ in rows]
+    index_states = inspect_window_index_lifecycles(
+        novels,
+        db=db,
+        has_payload_overrides={
+            novel.id: bool(has_window_index_payload)
+            for novel, has_window_index_payload in rows
+            if isinstance(getattr(novel, "id", None), int)
+        },
+    )
+    return [
+        _serialize_novel(
+            novel,
+            index_state=index_states.get(novel.id),
+        )
+        for novel in novels
+    ]
 
 
 @router.get("/{novel_id}", response_model=NovelResponse)
 def get_novel(novel_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_or_default)):
     """Get novel information."""
-    novel = db.query(Novel).filter(Novel.id == novel_id).first()
+    row = (
+        db.query(Novel)
+        .options(defer(Novel.window_index))
+        .add_columns(_novel_window_index_presence_column())
+        .filter(Novel.id == novel_id)
+        .first()
+    )
+    novel = row[0] if row is not None else None
     _verify_novel_access(novel, current_user)
-    return novel
+    index_state = inspect_window_index_lifecycle(
+        novel,
+        db=db,
+        has_payload_override=bool(row[1]) if row is not None else None,
+    )
+    return _serialize_novel(novel, index_state=index_state)
 
 
 @router.get("/{novel_id}/chapters", response_model=List[ChapterResponse])

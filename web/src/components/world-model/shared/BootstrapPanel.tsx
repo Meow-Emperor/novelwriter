@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { BookOpen, ChevronRight } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useBootstrapStatus, useTriggerBootstrap } from '@/hooks/world/useBootstrap'
+import { useNovelWindowIndex } from '@/hooks/novel/useNovelWindowIndex'
 import { worldKeys } from '@/hooks/world/keys'
 import { useToast } from '@/components/world-model/shared/useToast'
 import { getLlmApiErrorMessage } from '@/lib/llmErrorMessages'
+import { getWindowIndexBootstrapStatusMeta } from '@/lib/windowIndexStatus'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { LABELS } from '@/constants/labels'
@@ -41,6 +43,7 @@ type BootstrapPanelVariant = 'sidebar' | 'page'
 
 export function BootstrapPanel({ novelId, variant = 'sidebar' }: { novelId: number; variant?: BootstrapPanelVariant }) {
   const { data: job, isLoading } = useBootstrapStatus(novelId)
+  const { data: indexState } = useNovelWindowIndex(novelId)
   const trigger = useTriggerBootstrap(novelId)
   const { toast } = useToast()
   const qc = useQueryClient()
@@ -54,6 +57,20 @@ export function BootstrapPanel({ novelId, variant = 'sidebar' }: { novelId: numb
     )
   )
   const isInitialized = Boolean(job?.initialized ?? initializedFallback)
+  const indexStatusMeta = getWindowIndexBootstrapStatusMeta(indexState)
+  const indexStatusClassName = indexStatusMeta.tone === 'warning'
+    ? 'text-[hsl(var(--color-warning))]'
+    : 'text-muted-foreground/75'
+
+  const renderRowCopy = (options?: { summary?: string | null }) => (
+    <span className="flex flex-1 flex-col text-left">
+      <span>从章节提取</span>
+      {options?.summary ? (
+        <span className="text-[11px] opacity-70">{options.summary}</span>
+      ) : null}
+      <span className={`text-[10px] ${indexStatusClassName}`}>{indexStatusMeta.text}</span>
+    </span>
+  )
 
   useEffect(() => {
     const previousStatus = previousStatusRef.current
@@ -148,18 +165,19 @@ export function BootstrapPanel({ novelId, variant = 'sidebar' }: { novelId: numb
 
     // Failed
     if (job?.status === 'failed') {
+      const handleFailedAction = isInitialized ? handleReextract : handleInitialExtraction
       return (
         <>
           <button
             type="button"
-            onClick={handleInitialExtraction}
+            onClick={handleFailedAction}
             disabled={trigger.isPending}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:bg-[var(--nw-glass-bg-hover)] hover:text-foreground disabled:opacity-50 disabled:pointer-events-none"
           >
             <BookOpen className="h-4 w-4 shrink-0 opacity-70" />
-            <span className="flex-1">
-              <span className="text-[hsl(var(--color-warning))]">{LABELS.BOOTSTRAP_FAILED}</span>
-              {' · 重试'}
+            <span className="flex flex-1 flex-col text-left">
+              <span className="text-[hsl(var(--color-warning))]">{LABELS.BOOTSTRAP_FAILED} · 重试</span>
+              <span className={`text-[10px] ${indexStatusClassName}`}>{indexStatusMeta.text}</span>
             </span>
             <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-40" />
           </button>
@@ -170,8 +188,8 @@ export function BootstrapPanel({ novelId, variant = 'sidebar' }: { novelId: numb
 
     // Completed
     if (job?.status === 'completed') {
-      const short = job.result.index_refresh_only
-        ? '索引已刷新'
+      const summary = job.result.index_refresh_only
+        ? LABELS.BOOTSTRAP_COMPLETED_INDEX_REFRESH
         : `${job.result.entities_found} 实体 · ${job.result.relationships_found} 关系`
       return (
         <>
@@ -182,10 +200,7 @@ export function BootstrapPanel({ novelId, variant = 'sidebar' }: { novelId: numb
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:bg-[var(--nw-glass-bg-hover)] hover:text-foreground disabled:opacity-50 disabled:pointer-events-none"
           >
             <BookOpen className="h-4 w-4 shrink-0 opacity-70" />
-            <span className="flex-1">
-              <span>从章节提取</span>
-              <span className="ml-1.5 text-[11px] opacity-70">{short}</span>
-            </span>
+            {renderRowCopy({ summary })}
             <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-40" />
           </button>
           {reextractConfirmDialog}
@@ -203,7 +218,7 @@ export function BootstrapPanel({ novelId, variant = 'sidebar' }: { novelId: numb
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:bg-[var(--nw-glass-bg-hover)] hover:text-foreground disabled:opacity-50 disabled:pointer-events-none"
         >
           <BookOpen className="h-4 w-4 shrink-0 opacity-70" />
-          <span className="flex-1">从章节提取</span>
+          {renderRowCopy()}
           <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-40" />
         </button>
         {reextractConfirmDialog}
@@ -268,7 +283,10 @@ export function BootstrapPanel({ novelId, variant = 'sidebar' }: { novelId: numb
     return (
       <>
         <div className={shellClass + ' flex items-center gap-3'}>
-          <span className="text-xs text-[hsl(var(--color-warning))]">{LABELS.BOOTSTRAP_FAILED}</span>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-[hsl(var(--color-warning))]">{LABELS.BOOTSTRAP_FAILED}</span>
+            <span className={`text-[11px] ${indexStatusClassName}`}>{indexStatusMeta.text}</span>
+          </div>
           {renderPrimaryAction('outline')}
         </div>
         {reextractConfirmDialog}
@@ -283,7 +301,10 @@ export function BootstrapPanel({ novelId, variant = 'sidebar' }: { novelId: numb
     return (
       <>
         <div className={shellClass + ' flex items-center gap-3'}>
-          <span className="text-xs text-muted-foreground">{completionText}</span>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-muted-foreground">{completionText}</span>
+            <span className={`text-[11px] ${indexStatusClassName}`}>{indexStatusMeta.text}</span>
+          </div>
           {renderPrimaryAction('outline')}
         </div>
         {reextractConfirmDialog}
@@ -294,7 +315,7 @@ export function BootstrapPanel({ novelId, variant = 'sidebar' }: { novelId: numb
   return (
     <>
       <div className={shellClass + ' flex items-center gap-3'}>
-        <span className="text-xs text-muted-foreground flex-1" />
+        <span className={`text-xs flex-1 ${indexStatusClassName}`}>{indexStatusMeta.text}</span>
         {renderPrimaryAction()}
       </div>
       {reextractConfirmDialog}

@@ -68,16 +68,16 @@ export const LABELS = {
   PH_SYSTEM_NAME: '体系名称',
 
   // Bootstrap
-  BOOTSTRAP_INITIAL_EXTRACTION: '提取实体与关系',
-  BOOTSTRAP_REEXTRACT: '重提取实体关系',
+  BOOTSTRAP_INITIAL_EXTRACTION: '从章节提取',
+  BOOTSTRAP_REEXTRACT: '重新提取草稿',
   BOOTSTRAP_SCANNING: '处理中...',
-  BOOTSTRAP_COMPLETED_INDEX_REFRESH: '章节关联分析完成',
+  BOOTSTRAP_COMPLETED_INDEX_REFRESH: '检索索引已刷新',
   BOOTSTRAP_COMPLETED_EXTRACTION: (e: number, r: number) => `提取到 ${e} 个实体、${r} 条关系`,
   BOOTSTRAP_FAILED: '执行失败',
-  BOOTSTRAP_REEXTRACT_CONFIRM_TITLE: '危险操作：重提取实体关系',
+  BOOTSTRAP_REEXTRACT_CONFIRM_TITLE: '危险操作：重新提取章节草稿',
   BOOTSTRAP_REEXTRACT_CONFIRM_DESC:
-    '替换当前 AI 提取的草稿（保留已确认内容），然后重新提取实体和关系。\n确认继续吗？',
-  BOOTSTRAP_REEXTRACT_CONFIRM: '确认重提取',
+    '替换当前从章节提取的草稿（保留已确认内容），然后重新提取实体和关系。\n确认继续吗？',
+  BOOTSTRAP_REEXTRACT_CONFIRM: '确认重新提取',
   BOOTSTRAP_STEP_PENDING: '准备中',
   BOOTSTRAP_STEP_TOKENIZING: '分词处理',
   BOOTSTRAP_STEP_EXTRACTING: '提取候选词',

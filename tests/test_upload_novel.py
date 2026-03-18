@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import StaticPool, create_engine
+from sqlalchemy import StaticPool, create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, get_db
@@ -201,6 +201,143 @@ class TestUploadNovel:
         novel = db.get(Novel, resp.json()["novel_id"])
         assert novel is not None
         assert novel.language == "en-us"
+
+    def test_get_novel_exposes_window_index_lifecycle_contract(self, db, tmp_path, monkeypatch):
+        from app.api import novels as novels_api
+        from app.core.auth import get_current_user_or_default
+        from app.core.indexing import enqueue_window_index_rebuild_job, mark_window_index_inputs_changed
+
+        user = User(id=1, username="u", hashed_password="x", role="admin", is_active=True)
+        db.add(user)
+        db.commit()
+
+        upload_dir = tmp_path / "uploads"
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(novels_api, "UPLOAD_DIR", upload_dir)
+
+        app = _make_app(db, novels_api.router)
+        app.dependency_overrides[get_current_user_or_default] = lambda: user
+
+        novel = Novel(
+            title="T",
+            author="A",
+            language="zh",
+            file_path=str(upload_dir / "t.txt"),
+            total_chapters=1,
+            owner_id=user.id,
+        )
+        db.add(novel)
+        db.commit()
+        db.refresh(novel)
+        db.add(Chapter(novel_id=novel.id, chapter_number=1, title="第一章", content="这里是第一章内容。"))
+        db.commit()
+
+        revision = mark_window_index_inputs_changed(novel)
+        enqueue_window_index_rebuild_job(db, novel_id=novel.id, target_revision=revision)
+        db.commit()
+        detail_path = f"/api/novels/{novel.id}"
+
+        queries = {"novels": []}
+
+        def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+            _ = (conn, cursor, parameters, context, executemany)
+            normalized = " ".join(statement.lower().split())
+            if normalized.startswith("select") and " from novels " in normalized:
+                queries["novels"].append(normalized)
+
+        event.listen(engine, "before_cursor_execute", before_cursor_execute)
+        try:
+            with TestClient(app) as c:
+                response = c.get(detail_path)
+        finally:
+            event.remove(engine, "before_cursor_execute", before_cursor_execute)
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["window_index"] == {
+            "status": "missing",
+            "revision": 1,
+            "built_revision": None,
+            "error": None,
+            "job": {
+                "status": "queued",
+                "target_revision": 1,
+                "completed_revision": None,
+                "error": None,
+            },
+        }
+        assert len(queries["novels"]) == 1
+        assert "window_index as novels_window_index" not in queries["novels"][0]
+        assert "window_index is not null" in queries["novels"][0]
+
+    def test_list_novels_batches_window_index_job_reads(self, db, tmp_path, monkeypatch):
+        from app.api import novels as novels_api
+        from app.core.auth import get_current_user_or_default
+        from app.core.indexing import enqueue_window_index_rebuild_job, mark_window_index_inputs_changed
+
+        user = User(id=1, username="u", hashed_password="x", role="admin", is_active=True)
+        db.add(user)
+        db.commit()
+
+        upload_dir = tmp_path / "uploads"
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(novels_api, "UPLOAD_DIR", upload_dir)
+
+        novels: list[Novel] = []
+        for idx in range(3):
+            novel = Novel(
+                title=f"T{idx}",
+                author="A",
+                language="zh",
+                file_path=str(upload_dir / f"t{idx}.txt"),
+                total_chapters=1,
+                owner_id=user.id,
+            )
+            db.add(novel)
+            db.flush()
+            db.add(
+                Chapter(
+                    novel_id=novel.id,
+                    chapter_number=1,
+                    title="第一章",
+                    content="这里是第一章内容。",
+                )
+            )
+            revision = mark_window_index_inputs_changed(novel)
+            enqueue_window_index_rebuild_job(db, novel_id=novel.id, target_revision=revision)
+            novels.append(novel)
+        db.commit()
+
+        app = _make_app(db, novels_api.router)
+        app.dependency_overrides[get_current_user_or_default] = lambda: user
+
+        query_counts = {"derived_asset_jobs": 0, "novels": []}
+
+        def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+            _ = (conn, cursor, parameters, context, executemany)
+            normalized = " ".join(statement.lower().split())
+            if "from derived_asset_jobs" in normalized:
+                query_counts["derived_asset_jobs"] += 1
+            if normalized.startswith("select") and " from novels " in normalized:
+                query_counts["novels"].append(normalized)
+
+        event.listen(engine, "before_cursor_execute", before_cursor_execute)
+        try:
+            with TestClient(app) as c:
+                query_counts["derived_asset_jobs"] = 0
+                query_counts["novels"].clear()
+                response = c.get("/api/novels")
+        finally:
+            event.remove(engine, "before_cursor_execute", before_cursor_execute)
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert len(payload) == 3
+        assert query_counts["derived_asset_jobs"] == 1
+        assert len(query_counts["novels"]) == 1
+        assert "window_index as novels_window_index" not in query_counts["novels"][0]
+        assert "window_index is not null" in query_counts["novels"][0]
+        assert {item["window_index"]["job"]["status"] for item in payload} == {"queued"}
 
     def test_upload_auto_detects_english_language_when_omitted(self, db, tmp_path, monkeypatch):
         from app.api import novels as novels_api
