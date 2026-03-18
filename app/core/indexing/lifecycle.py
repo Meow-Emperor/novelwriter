@@ -243,6 +243,10 @@ def run_window_index_rebuild_for_latest_revision(
                     novel_language=novel_language,
                     settings=resolved_settings,
                     include_cooccurrence=False,
+                    # Background rebuilds run inside the live web app process.
+                    # Keep them on the pure-Python matcher path instead of the
+                    # native automaton path to avoid crashing the server.
+                    use_automaton=False,
                 )
             except Exception:
                 logger.exception(

@@ -27,11 +27,10 @@ from app.core.world.write import (
     build_relationship_signature,
     relationship_signature_from_row,
 )
-from app.core.indexing.window_index import NovelIndex
 from app.database import SessionLocal
 from app.language import resolve_prompt_locale
 from app.language_policy import get_language_policy
-from app.models import BootstrapJob, Chapter, Novel, WorldEntity, WorldRelationship
+from app.models import BootstrapJob, Novel, WorldEntity, WorldRelationship
 
 logger = logging.getLogger(__name__)
 

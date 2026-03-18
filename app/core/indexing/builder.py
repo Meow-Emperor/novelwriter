@@ -250,6 +250,7 @@ def build_window_index(
     window_step: int = DEFAULT_WINDOW_STEP,
     min_window_count: int = DEFAULT_MIN_WINDOW_COUNT,
     min_window_ratio: float = DEFAULT_MIN_WINDOW_RATIO,
+    use_automaton: bool = True,
 ) -> tuple[NovelIndex, dict[str, int]]:
     if window_size <= 0 or window_step <= 0:
         raise ValueError("Window size and step must be positive")
@@ -262,7 +263,7 @@ def build_window_index(
     if not candidate_names or not chapters:
         return NovelIndex(), {}
 
-    automaton = _build_automaton(candidate_names)
+    automaton = _build_automaton(candidate_names) if use_automaton else None
 
     entity_windows_raw: dict[str, list[WindowRef]] = defaultdict(list)
     window_entities_raw: dict[int, set[str]] = defaultdict(set)

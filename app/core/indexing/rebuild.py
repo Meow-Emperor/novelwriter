@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from threading import Lock
 from typing import Sequence
 
 from sqlalchemy.orm import Session
@@ -20,6 +21,8 @@ from .builder import (
     tokenize_text,
 )
 from .window_index import NovelIndex
+
+_window_index_build_lock = Lock()
 
 
 @dataclass(slots=True)
@@ -52,6 +55,7 @@ def build_window_index_artifacts(
     novel_language: str | None = None,
     settings: Settings | None = None,
     include_cooccurrence: bool = True,
+    use_automaton: bool = True,
 ) -> WindowIndexArtifacts:
     resolved_settings = settings or get_settings()
     if not chapters:
@@ -64,30 +68,35 @@ def build_window_index_artifacts(
             cooccurrence_pairs=[],
         )
 
-    combined_text = "\n".join(chapter.text for chapter in chapters)
-    language, tokens = tokenize_text(
-        combined_text,
-        language=novel_language,
-    )
-    common_words = load_common_words(
-        language,
-        common_words_dir=resolved_settings.bootstrap_common_words_dir,
-    )
-    candidates = extract_candidates(tokens, common_words, language=language)
-    index, importance = build_window_index(
-        chapters,
-        candidates,
-        window_size=resolved_settings.bootstrap_window_size,
-        window_step=resolved_settings.bootstrap_window_step,
-        min_window_count=resolved_settings.bootstrap_min_window_count,
-        min_window_ratio=resolved_settings.bootstrap_min_window_ratio,
-    )
-    cooccurrence_pairs = compute_cooccurrence(index) if include_cooccurrence else []
-    return WindowIndexArtifacts(
-        language=language,
-        tokens=tokens,
-        candidates=candidates,
-        index=index,
-        importance=importance,
-        cooccurrence_pairs=cooccurrence_pairs,
-    )
+    # Serialize builder usage across request/background worker threads.
+    # The tokenizer/matching stack is shared process-wide, and concurrent rebuilds
+    # have crashed the integration app process under threaded background execution.
+    with _window_index_build_lock:
+        combined_text = "\n".join(chapter.text for chapter in chapters)
+        language, tokens = tokenize_text(
+            combined_text,
+            language=novel_language,
+        )
+        common_words = load_common_words(
+            language,
+            common_words_dir=resolved_settings.bootstrap_common_words_dir,
+        )
+        candidates = extract_candidates(tokens, common_words, language=language)
+        index, importance = build_window_index(
+            chapters,
+            candidates,
+            window_size=resolved_settings.bootstrap_window_size,
+            window_step=resolved_settings.bootstrap_window_step,
+            min_window_count=resolved_settings.bootstrap_min_window_count,
+            min_window_ratio=resolved_settings.bootstrap_min_window_ratio,
+            use_automaton=use_automaton,
+        )
+        cooccurrence_pairs = compute_cooccurrence(index) if include_cooccurrence else []
+        return WindowIndexArtifacts(
+            language=language,
+            tokens=tokens,
+            candidates=candidates,
+            index=index,
+            importance=importance,
+            cooccurrence_pairs=cooccurrence_pairs,
+        )
