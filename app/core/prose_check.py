@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from collections.abc import Callable
 from typing import Any, Sequence
 
 from app.language_policy import get_language_policy
@@ -58,22 +59,47 @@ def _evidence_snippet(text: str, start: int, end: int, *, window: int = 30) -> s
 # kana, and hangul as countable script characters.
 _CJK_SCRIPT_RANGES = "\u3400-\u4dbf\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af"
 _RE_CJK_CHAR = re.compile(f"[{_CJK_SCRIPT_RANGES}]")
+_RE_CJK_RUN = re.compile(f"[{_CJK_SCRIPT_RANGES}]+")
+_RE_WS_WORD = re.compile(r"[^\W_]+(?:['’][^\W_]+)*", re.UNICODE)
+
+NgramOccurrence = tuple[str, int, int]
 
 
-def _cjk_ngrams(text: str, n: int) -> list[str]:
-    """Extract character-level n-grams from CJK text."""
-    chars = _RE_CJK_CHAR.findall(text)
-    if len(chars) < n:
+def _cjk_ngrams(text: str, n: int) -> list[NgramOccurrence]:
+    """Extract character-level n-grams without crossing punctuation or paragraph boundaries."""
+    occurrences: list[NgramOccurrence] = []
+    for match in _RE_CJK_RUN.finditer(text):
+        segment = match.group()
+        if len(segment) < n:
+            continue
+        base = match.start()
+        occurrences.extend(
+            (segment[i : i + n], base + i, base + i + n)
+            for i in range(len(segment) - n + 1)
+        )
+    return occurrences
+
+
+def _whitespace_tokens(text: str) -> list[tuple[str, int, int]]:
+    return [
+        (match.group().lower(), match.start(), match.end())
+        for match in _RE_WS_WORD.finditer(text)
+    ]
+
+
+def _whitespace_ngrams(text: str, n: int) -> list[NgramOccurrence]:
+    """Extract normalized word n-grams, ignoring surrounding punctuation and quotes."""
+    tokens = _whitespace_tokens(text)
+    if len(tokens) < n:
         return []
-    return ["".join(chars[i : i + n]) for i in range(len(chars) - n + 1)]
-
-
-def _whitespace_ngrams(text: str, n: int) -> list[str]:
-    """Extract word-level n-grams from whitespace-separated text."""
-    words = text.lower().split()
-    if len(words) < n:
-        return []
-    return [" ".join(words[i : i + n]) for i in range(len(words) - n + 1)]
+    return [
+        (
+            " ".join(token for token, _, _ in tokens[i : i + n]),
+            tokens[i][1],
+            tokens[i + n - 1][2],
+        )
+        for i in range(len(tokens) - n + 1)
+    ]
 
 
 _REPEATED_NGRAM_THRESHOLD = 3  # flag if an n-gram appears >= this many times
@@ -85,9 +111,8 @@ def _top_repeated_ngram_candidate(
     text: str,
     *,
     ngram_sizes: Sequence[int],
-    gram_getter,
-    index_finder,
-) -> tuple[str, int, int] | None:
+    gram_getter: Callable[[str, int], list[NgramOccurrence]],
+) -> tuple[str, int, int, int] | None:
     """
     Return the strongest repeated n-gram candidate for the given token family.
 
@@ -95,15 +120,19 @@ def _top_repeated_ngram_candidate(
     and continuation. This keeps the panel readable and avoids surfacing every
     sliding-window rotation of the same repeated phrase.
     """
-    candidates: list[tuple[str, int, int]] = []
+    candidates: list[tuple[str, int, int, int]] = []
 
     for n in ngram_sizes:
-        counts = Counter(gram_getter(text, n))
+        occurrences = gram_getter(text, n)
+        counts = Counter(gram for gram, _, _ in occurrences)
+        first_spans: dict[str, tuple[int, int]] = {}
+        for gram, start, end in occurrences:
+            first_spans.setdefault(gram, (start, end))
         for gram, count in counts.items():
             if count < _REPEATED_NGRAM_THRESHOLD:
                 continue
-            idx = index_finder(text, gram)
-            candidates.append((gram, count, idx))
+            start, end = first_spans[gram]
+            candidates.append((gram, count, start, end))
 
     if not candidates:
         return None
@@ -112,7 +141,7 @@ def _top_repeated_ngram_candidate(
         key=lambda item: (
             -item[1],          # more repetitions first
             -len(item[0]),     # then prefer the more specific phrase
-            item[2] if item[2] >= 0 else 10**9,
+            item[2],
             item[0],
         )
     )
@@ -129,11 +158,10 @@ def _check_repeated_ngrams(
             text,
             ngram_sizes=sorted(_NGRAM_SIZES_CJK, reverse=True),
             gram_getter=_cjk_ngrams,
-            index_finder=lambda raw_text, gram: raw_text.find(gram),
         )
         if candidate is not None:
-            gram, count, idx = candidate
-            evidence = _evidence_snippet(text, idx, idx + len(gram)) if idx >= 0 else gram
+            gram, count, start, end = candidate
+            evidence = _evidence_snippet(text, start, end)
             warnings.append(
                 ProseWarning(
                     code="repeated_ngram",
@@ -150,11 +178,10 @@ def _check_repeated_ngrams(
             text,
             ngram_sizes=sorted(_NGRAM_SIZES_WS, reverse=True),
             gram_getter=_whitespace_ngrams,
-            index_finder=lambda raw_text, gram: raw_text.lower().find(gram),
         )
         if candidate is not None:
-            gram, count, idx = candidate
-            evidence = _evidence_snippet(text, idx, idx + len(gram)) if idx >= 0 else gram
+            gram, count, start, end = candidate
+            evidence = _evidence_snippet(text, start, end)
             warnings.append(
                 ProseWarning(
                     code="repeated_ngram",

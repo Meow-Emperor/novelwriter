@@ -364,7 +364,9 @@ def _build_advisory_continuation_warning_update(
     novel_id: int,
     request_id: str | None = None,
 ) -> dict[str, Any]:
-    """Run advisory continuation postchecks and degrade to no warnings on failure."""
+    """Run advisory continuation warnings, degrading each optional check independently."""
+    update: dict[str, Any] = {}
+
     try:
         drift_warnings = postcheck_continuation(
             writer_ctx=writer_ctx,
@@ -373,24 +375,33 @@ def _build_advisory_continuation_warning_update(
             continuations=continuations,
             novel_language=novel_language,
         )
+    except Exception:
+        logger.warning(
+            "continuation drift postcheck failed (request_id=%s, novel_id=%s)",
+            request_id,
+            novel_id,
+            exc_info=True,
+        )
+    else:
+        if drift_warnings:
+            update["drift_warnings"] = drift_warnings
+
+    try:
         prose_warnings = prose_check_continuation(
             continuations=continuations,
             novel_language=novel_language,
         )
     except Exception:
         logger.warning(
-            "continuation postchecks failed (request_id=%s, novel_id=%s)",
+            "continuation prose postcheck failed (request_id=%s, novel_id=%s)",
             request_id,
             novel_id,
             exc_info=True,
         )
-        return {}
+    else:
+        if prose_warnings:
+            update["prose_warnings"] = prose_warnings
 
-    update: dict[str, Any] = {}
-    if drift_warnings:
-        update["drift_warnings"] = drift_warnings
-    if prose_warnings:
-        update["prose_warnings"] = prose_warnings
     return update
 
 

@@ -42,6 +42,22 @@ class TestRepeatedNgram:
         assert len(ngram_warnings) == 1
         assert ngram_warnings[0].message_params["phrase"] == "the quick brown"
 
+    def test_does_not_cross_cjk_sentence_boundaries(self) -> None:
+        text = "甲乙。甲乙。甲乙。甲乙。"
+        conts = _make_continuations(text)
+        warnings = prose_check_continuation(continuations=conts, novel_language="zh")
+        ngram_warnings = [w for w in warnings if w.code == "repeated_ngram"]
+        assert ngram_warnings == []
+
+    def test_normalizes_whitespace_tokens_before_counting(self) -> None:
+        text = "the quick brown, the quick brown. the quick brown!"
+        conts = _make_continuations(text)
+        warnings = prose_check_continuation(continuations=conts, novel_language="en")
+        ngram_warnings = [w for w in warnings if w.code == "repeated_ngram"]
+        assert len(ngram_warnings) == 1
+        assert ngram_warnings[0].message_params["phrase"] == "the quick brown"
+        assert ngram_warnings[0].message_params["count"] == 3
+
     def test_no_warning_below_threshold(self) -> None:
         text = "the quick brown fox jumped the quick brown"  # only 2 repetitions
         conts = _make_continuations(text)

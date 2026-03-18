@@ -220,12 +220,18 @@ class TestContinueEndpoint:
     def test_sync_continue_degrades_when_prose_postcheck_raises(self, client, db, novel, monkeypatch):
         c, _ = client
 
+        import app.core.generator as generator_mod
         import app.api.novels as novels_mod
+
+        async def fake_generate(prompt: str, system_prompt: str = "", max_tokens: int = 0, **kwargs) -> str:
+            del prompt, system_prompt, max_tokens, kwargs
+            return "总之，《永夜渊》现世。"
 
         def raise_prose_checker(**kwargs):
             del kwargs
             raise RuntimeError("boom")
 
+        monkeypatch.setattr(generator_mod.ai_client, "generate", fake_generate)
         monkeypatch.setattr(novels_mod, "prose_check_continuation", raise_prose_checker)
 
         resp = c.post(
@@ -236,12 +242,48 @@ class TestContinueEndpoint:
 
         data = resp.json()
         assert len(data["continuations"]) == 1
-        assert data["continuations"][0]["content"] == "续写内容"
-        assert data["debug"]["drift_warnings"] == []
+        assert data["continuations"][0]["content"] == "总之，《永夜渊》现世。"
+        assert any(w["code"] == "unknown_term_quoted" for w in data["debug"]["drift_warnings"])
         assert data["debug"]["prose_warnings"] == []
 
         cont = db.query(Continuation).filter(Continuation.novel_id == novel.id).one()
-        assert cont.content == "续写内容"
+        assert cont.content == "总之，《永夜渊》现世。"
+
+    def test_stream_done_event_preserves_drift_warnings_when_prose_postcheck_raises(self, client, novel, monkeypatch):
+        c, _ = client
+
+        import app.core.generator as generator_mod
+        import app.api.novels as novels_mod
+
+        async def fake_generate(prompt: str, system_prompt: str = "", max_tokens: int = 0, **kwargs) -> str:
+            del prompt, system_prompt, max_tokens, kwargs
+            return "总之，《永夜渊》现世。"
+
+        async def fake_generate_stream(prompt: str, system_prompt: str = "", max_tokens: int = 0, **kwargs):
+            del prompt, system_prompt, max_tokens, kwargs
+            yield "总之，"
+            yield "《永夜渊》现世。"
+
+        def raise_prose_checker(**kwargs):
+            del kwargs
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(generator_mod.ai_client, "generate", fake_generate)
+        monkeypatch.setattr(generator_mod.ai_client, "generate_stream", fake_generate_stream)
+        monkeypatch.setattr(novels_mod, "prose_check_continuation", raise_prose_checker)
+
+        resp = c.post(
+            f"/api/novels/{novel.id}/continue/stream",
+            json={"num_versions": 2, "context_chapters": 2},
+        )
+        assert resp.status_code == 200
+
+        events = [json.loads(ln) for ln in resp.text.splitlines() if ln.strip()]
+        done = next(e for e in events if e["type"] == "done")
+        debug = done["debug"]
+
+        assert any(w["code"] == "unknown_term_quoted" for w in debug["drift_warnings"])
+        assert debug["prose_warnings"] == []
 
     def test_context_chapters_override_affects_relevance(self, client, novel, world):
         c, captured = client
