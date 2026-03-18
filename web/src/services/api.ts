@@ -72,6 +72,13 @@ export const api = {
     return res.json() as Promise<{ access_token: string; token_type: string }>
   },
 
+  getGitHubLoginUrl: (redirectTo: string) => {
+    const params = new URLSearchParams()
+    if (redirectTo) params.set('redirect_to', redirectTo)
+    const qs = params.toString()
+    return `${BASE_URL}/api/auth/github/start${qs ? `?${qs}` : ''}`
+  },
+
   getQuota: () => request<QuotaResponse>('/api/auth/quota'),
 
   logout: async () => {

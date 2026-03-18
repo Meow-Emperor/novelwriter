@@ -84,8 +84,11 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 1440
 
-    # Hosted mode: invite code & quota
+    # Hosted mode: auth & quota
     invite_code: str = ""
+    github_oauth_client_id: str = ""
+    github_oauth_client_secret: str = ""
+    github_oauth_redirect_uri: str = ""
     initial_quota: int = 5
     feedback_bonus_quota: int = 20
     feedback_suggestion_bonus_quota: int = 10

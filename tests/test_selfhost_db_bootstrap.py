@@ -161,7 +161,17 @@ def test_auto_upgrades_unversioned_schema_missing_only_derived_asset_jobs(sqlite
 
 
 def test_matches_unversioned_baseline_for_chapter_source_metadata():
-    missing_columns = {"chapters": {"source_chapter_label", "source_chapter_number"}}
+    missing_columns = {
+        "auth_identities": {
+            "user_id",
+            "provider",
+            "provider_user_id",
+            "provider_login",
+            "provider_email",
+            "last_login_at",
+        },
+        "chapters": {"source_chapter_label", "source_chapter_number"},
+    }
 
     assert _matching_unversioned_upgrade_baseline(missing_columns) == "030"
 

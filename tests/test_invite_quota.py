@@ -142,6 +142,32 @@ class TestInviteRegistration:
         assert user["generation_quota"] == 5
         assert user["feedback_submitted"] is False
 
+    def test_invite_creates_auth_identity_row(self, hosted_client):
+        hosted_client.post("/api/auth/invite", json={
+            "invite_code": "TEST-CODE-123",
+            "nickname": "身份映射测试",
+        })
+
+        db_gen = app.dependency_overrides[get_db]()
+        db = next(db_gen)
+        try:
+            from app.core.auth import AUTH_PROVIDER_INVITE
+            from app.models import AuthIdentity, User
+
+            user = db.query(User).filter(User.nickname == "身份映射测试").one()
+            identity = (
+                db.query(AuthIdentity)
+                .filter(AuthIdentity.user_id == user.id)
+                .one()
+            )
+
+            assert identity.provider == AUTH_PROVIDER_INVITE
+            assert identity.provider_user_id == "身份映射测试"
+            assert identity.provider_login == "身份映射测试"
+            assert identity.last_login_at is not None
+        finally:
+            db.close()
+
     def test_invite_relogin_returns_same_user_and_preserves_quota(self, hosted_client):
         """Re-inviting with the same nickname should log into the same account."""
         resp1 = hosted_client.post("/api/auth/invite", json={
@@ -158,13 +184,16 @@ class TestInviteRegistration:
 
         # Simulate usage by decrementing quota on the backend.
         from app.core.auth import decrement_quota
-        from app.models import User
+        from app.models import AuthIdentity, User
 
         db_gen = app.dependency_overrides[get_db]()
         db = next(db_gen)
-        u = db.query(User).filter(User.id == user_id).first()
-        assert u is not None
-        decrement_quota(db, u, count=2)
+        try:
+            u = db.query(User).filter(User.id == user_id).first()
+            assert u is not None
+            decrement_quota(db, u, count=2)
+        finally:
+            db.close()
 
         # Re-login via invite: should NOT create a new user or reset quota.
         resp2 = hosted_client.post("/api/auth/invite", json={
@@ -179,6 +208,131 @@ class TestInviteRegistration:
         user2 = me2.json()
         assert user2["id"] == user_id
         assert user2["generation_quota"] == 3
+
+        db_gen = app.dependency_overrides[get_db]()
+        db = next(db_gen)
+        try:
+            identities = (
+                db.query(AuthIdentity)
+                .filter(AuthIdentity.provider_user_id == "重登测试")
+                .all()
+            )
+            assert len(identities) == 1
+            assert identities[0].user_id == user_id
+        finally:
+            db.close()
+
+    def test_invite_login_repairs_missing_legacy_identity_without_creating_duplicate_user(self, hosted_client):
+        from app.core.auth import AUTH_PROVIDER_INVITE, hash_password
+        from app.models import AuthIdentity, User
+
+        db_gen = app.dependency_overrides[get_db]()
+        db = next(db_gen)
+        try:
+            legacy_user = User(
+                username="legacy_invite_user",
+                hashed_password=hash_password("legacy-secret"),
+                nickname="历史用户",
+                generation_quota=2,
+            )
+            db.add(legacy_user)
+            db.commit()
+            db.refresh(legacy_user)
+            legacy_user_id = legacy_user.id
+        finally:
+            db.close()
+
+        invite_resp = hosted_client.post("/api/auth/invite", json={
+            "invite_code": "TEST-CODE-123",
+            "nickname": "历史用户",
+        })
+        assert invite_resp.status_code == 201
+
+        me_resp = hosted_client.get("/api/auth/me")
+        assert me_resp.status_code == 200
+        user = me_resp.json()
+        assert user["id"] == legacy_user_id
+        assert user["generation_quota"] == 2
+
+        db_gen = app.dependency_overrides[get_db]()
+        db = next(db_gen)
+        try:
+            repaired_identity = (
+                db.query(AuthIdentity)
+                .filter(
+                    AuthIdentity.provider == AUTH_PROVIDER_INVITE,
+                    AuthIdentity.provider_user_id == "历史用户",
+                )
+                .one()
+            )
+            users = db.query(User).filter(User.nickname == "历史用户").order_by(User.id.asc()).all()
+
+            assert repaired_identity.user_id == legacy_user_id
+            assert repaired_identity.provider_login == "历史用户"
+            assert repaired_identity.last_login_at is not None
+            assert [existing_user.id for existing_user in users] == [legacy_user_id]
+        finally:
+            db.close()
+
+    def test_invite_login_repairs_missing_identity_using_earliest_legacy_user(self, hosted_client):
+        from app.core.auth import AUTH_PROVIDER_INVITE, hash_password
+        from app.models import AuthIdentity, User
+
+        db_gen = app.dependency_overrides[get_db]()
+        db = next(db_gen)
+        try:
+            first_user = User(
+                username="legacy_dup_1",
+                hashed_password=hash_password("legacy-secret-1"),
+                nickname="重复历史用户",
+                generation_quota=2,
+            )
+            second_user = User(
+                username="legacy_dup_2",
+                hashed_password=hash_password("legacy-secret-2"),
+                nickname="重复历史用户",
+                generation_quota=4,
+            )
+            db.add(first_user)
+            db.commit()
+            db.refresh(first_user)
+            db.add(second_user)
+            db.commit()
+            db.refresh(second_user)
+            first_user_id = first_user.id
+            second_user_id = second_user.id
+        finally:
+            db.close()
+
+        invite_resp = hosted_client.post("/api/auth/invite", json={
+            "invite_code": "TEST-CODE-123",
+            "nickname": "重复历史用户",
+        })
+        assert invite_resp.status_code == 201
+
+        me_resp = hosted_client.get("/api/auth/me")
+        assert me_resp.status_code == 200
+        user = me_resp.json()
+        assert user["id"] == first_user_id
+        assert user["generation_quota"] == 2
+
+        db_gen = app.dependency_overrides[get_db]()
+        db = next(db_gen)
+        try:
+            repaired_identity = (
+                db.query(AuthIdentity)
+                .filter(
+                    AuthIdentity.provider == AUTH_PROVIDER_INVITE,
+                    AuthIdentity.provider_user_id == "重复历史用户",
+                )
+                .one()
+            )
+            users = db.query(User).filter(User.nickname == "重复历史用户").order_by(User.id.asc()).all()
+
+            assert repaired_identity.user_id == first_user_id
+            assert [existing_user.id for existing_user in users] == [first_user_id, second_user_id]
+        finally:
+            db.close()
 
     def test_invite_blocks_new_signup_once_hosted_user_cap_is_reached(self, hosted_client, monkeypatch):
         monkeypatch.setenv("HOSTED_MAX_USERS", "1")
@@ -214,12 +368,12 @@ class TestInviteRegistration:
         assert resp2.status_code == 201
 
     def test_invite_cap_stays_atomic_under_concurrent_signups(self, hosted_client, monkeypatch):
-        import app.api.auth as auth_api
+        import app.core.auth as auth_core
 
         monkeypatch.setenv("HOSTED_MAX_USERS", "1")
         reload_settings()
 
-        original_hash_password = auth_api.hash_password
+        original_hash_password = auth_core.hash_password
         first_signup_entered = threading.Event()
         release_first_signup = threading.Event()
         hash_call_count = 0
@@ -237,7 +391,7 @@ class TestInviteRegistration:
 
             return original_hash_password(raw_password)
 
-        monkeypatch.setattr(auth_api, "hash_password", slow_hash_password)
+        monkeypatch.setattr(auth_core, "hash_password", slow_hash_password)
 
         results: dict[str, object] = {}
 

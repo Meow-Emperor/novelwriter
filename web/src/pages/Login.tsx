@@ -3,29 +3,69 @@
 
 import { useState } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
+import { Github } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/contexts/AuthContext"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { useConfirmDialog } from "@/hooks/useConfirmDialog"
 import { AnimatedBackground } from "@/components/layout/AnimatedBackground"
 import { NwButton } from "@/components/ui/nw-button"
-import { ApiError } from "@/services/api"
+import { ApiError, api } from "@/services/api"
 
-const DEPLOY_MODE = import.meta.env.VITE_DEPLOY_MODE || "selfhost"
+const DEFAULT_POST_LOGIN_DESTINATION = "/library"
 
-function getPostLoginDestination(state: unknown): string {
-    if (!state || typeof state !== "object" || !("from" in state)) return "/library"
+function isHostedDeployMode(): boolean {
+    return (import.meta.env.VITE_DEPLOY_MODE || "selfhost") === "hosted"
+}
 
-    const from = state.from
-    if (typeof from !== "string") return "/library"
-    if (!from.startsWith("/") || from.startsWith("//")) return "/library"
-    if (from === "/login" || from.startsWith("/login?")) return "/library"
+function resolveSafeClientRedirect(value: string | null | undefined): string {
+    const candidate = (value || "").trim()
+    if (!candidate || candidate.includes("\\") || candidate.includes("\u0000")) return DEFAULT_POST_LOGIN_DESTINATION
 
-    return from
+    try {
+        const url = new URL(candidate, "http://novwr.local")
+        if (url.origin !== "http://novwr.local") return DEFAULT_POST_LOGIN_DESTINATION
+        if (!url.pathname.startsWith("/") || url.pathname.startsWith("//")) return DEFAULT_POST_LOGIN_DESTINATION
+        if (url.pathname.startsWith("/login") || url.pathname.startsWith("/api")) return DEFAULT_POST_LOGIN_DESTINATION
+        return `${url.pathname}${url.search}${url.hash}`
+    } catch {
+        return DEFAULT_POST_LOGIN_DESTINATION
+    }
+}
+
+export function getPostLoginDestination(state: unknown, search = ""): string {
+    if (state && typeof state === "object" && "from" in state) {
+        const from = state.from
+        if (typeof from === "string" && from.trim()) {
+            return resolveSafeClientRedirect(from)
+        }
+    }
+
+    const redirectTo = new URLSearchParams(search).get("redirect_to")
+    return resolveSafeClientRedirect(redirectTo)
+}
+
+export function getOAuthErrorMessage(code: string | null): string | null {
+    switch (code) {
+        case "github_oauth_not_configured":
+            return "GitHub 登录暂未配置，请稍后再试。"
+        case "github_oauth_state_invalid":
+            return "登录状态已失效，请重新点击 GitHub 登录。"
+        case "github_oauth_access_denied":
+            return "你已取消 GitHub 授权，未完成登录。"
+        case "github_oauth_signup_blocked":
+            return "当前暂不接受新的 GitHub 注册，请稍后再试。"
+        case "github_oauth_account_disabled":
+            return "该账户已被停用，请联系管理员。"
+        case "github_oauth_failed":
+            return "GitHub 登录失败，请稍后重试。"
+        default:
+            return null
+    }
 }
 
 export default function Login() {
-    const isHosted = DEPLOY_MODE === "hosted"
+    const isHosted = isHostedDeployMode()
 
     // Hosted mode fields
     const [inviteCode, setInviteCode] = useState("")
@@ -40,7 +80,10 @@ export default function Login() {
     const location = useLocation()
     const navigate = useNavigate()
     const { alert, dialogProps } = useConfirmDialog()
-    const postLoginDestination = getPostLoginDestination(location.state)
+    const postLoginDestination = getPostLoginDestination(location.state, location.search)
+    const searchParams = new URLSearchParams(location.search)
+    const oauthErrorMessage = getOAuthErrorMessage(searchParams.get("oauth_error"))
+    const githubLoginUrl = api.getGitHubLoginUrl(postLoginDestination)
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -61,6 +104,8 @@ export default function Login() {
 
                 if (isHosted && err.status === 403) {
                     await alert({ title: "邀请码无效", description: `请检查邀请码是否正确${requestIdSuffix}` })
+                } else if (isHosted && err.status === 503 && err.code === "hosted_user_cap_reached") {
+                    await alert({ title: "注册已暂停", description: `当前暂不接受新的注册，请稍后再试${requestIdSuffix}` })
                 } else if (err.status === 401) {
                     await alert({ title: "登录失败", description: `用户名或密码错误${requestIdSuffix}` })
                 } else if (err.status === 404) {
@@ -94,14 +139,37 @@ export default function Login() {
                 <div className="flex flex-col gap-3 w-full">
                     <span className="font-mono text-[28px] font-bold text-foreground">NovWr</span>
                     <span className="font-sans text-[15px] text-muted-foreground">
-                        {isHosted ? "输入邀请码开始体验" : "登录到你的账户"}
+                        {isHosted ? "使用 GitHub 或邀请码开始体验" : "登录到你的账户"}
                     </span>
                 </div>
+
+                {oauthErrorMessage ? (
+                    <div className="rounded-xl border border-[hsl(var(--color-danger)/0.28)] bg-[hsl(var(--color-danger)/0.10)] px-4 py-3 text-sm text-foreground">
+                        {oauthErrorMessage}
+                    </div>
+                ) : null}
 
                 {/* Form */}
                 <form onSubmit={handleSubmit} className="flex flex-col gap-5 w-full" data-testid="login-form">
                     {isHosted ? (
                         <>
+                            <NwButton
+                                asChild
+                                variant="glass"
+                                className="h-11 w-full rounded-xl border-[var(--nw-glass-border)] bg-[hsl(var(--background)/0.5)] text-sm font-medium"
+                            >
+                                <a href={githubLoginUrl} data-testid="login-github-link">
+                                    <Github className="h-4 w-4" />
+                                    使用 GitHub 登录
+                                </a>
+                            </NwButton>
+
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                <div className="h-px flex-1 bg-[var(--nw-glass-border)]" />
+                                <span>或使用邀请码</span>
+                                <div className="h-px flex-1 bg-[var(--nw-glass-border)]" />
+                            </div>
+
                             <div className="flex flex-col gap-1.5 w-full">
                                 <label className="text-sm font-medium leading-none" htmlFor="invite-code">
                                     邀请码

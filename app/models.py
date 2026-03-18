@@ -157,6 +157,26 @@ class User(Base):
     feedback_answers = Column(JSON, nullable=True)
     preferences = Column(JSON, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
+    auth_identities = relationship("AuthIdentity", back_populates="user", cascade="all, delete-orphan")
+
+
+class AuthIdentity(Base):
+    __tablename__ = "auth_identities"
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_user_id", name="uq_auth_identities_provider_user"),
+        Index("ix_auth_identities_user_provider", "user_id", "provider"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    provider = Column(String(50), nullable=False)
+    provider_user_id = Column(String(255), nullable=False)
+    provider_login = Column(String(255), nullable=True)
+    provider_email = Column(String(255), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    last_login_at = Column(DateTime, nullable=True)
+
+    user = relationship("User", back_populates="auth_identities")
 
 
 class QuotaReservation(Base):

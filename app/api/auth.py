@@ -1,8 +1,17 @@
 """Authentication API endpoints."""
 
+import base64
+import hashlib
+import json
+import logging
 import secrets
+from dataclasses import dataclass
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode, urlsplit
+from urllib.request import Request as UrlRequest, urlopen
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 from sqlalchemy import func as sa_func
@@ -12,19 +21,22 @@ from app.config import get_settings, resolve_context_chapters
 from app.database import get_db
 from app.models import User, UserEvent
 from app.core.auth import (
-    hash_password,
+    AUTH_PROVIDER_GITHUB,
+    AUTH_PROVIDER_INVITE,
+    DEFAULT_OAUTH_STATE_TTL_SECONDS,
     verify_password,
-    create_access_token,
     clear_auth_cookie,
+    create_oauth_state_token,
+    decode_oauth_state_token,
     get_current_user_or_default,
+    issue_user_session,
     reconcile_abandoned_quota_reservations,
     require_admin,
-    set_auth_cookie,
+    resolve_or_provision_hosted_user_for_identity,
 )
-from app.core.events import record_event
-from app.core.safety_fuses import ensure_hosted_user_capacity, hosted_signup_lock
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
 
 
 class RegisterRequest(BaseModel):
@@ -67,14 +79,232 @@ class QuotaResponse(BaseModel):
     feedback_submitted: bool
 
 
+DEFAULT_POST_LOGIN_REDIRECT = "/library"
+GITHUB_OAUTH_STATE_COOKIE_NAME = "novwr_github_oauth_state"
+GITHUB_OAUTH_PKCE_COOKIE_NAME = "novwr_github_oauth_pkce"
+GITHUB_OAUTH_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
+GITHUB_OAUTH_TOKEN_URL = "https://github.com/login/oauth/access_token"
+GITHUB_OAUTH_USER_URL = "https://api.github.com/user"
+GITHUB_OAUTH_SCOPE = "read:user"
+GITHUB_OAUTH_CALLBACK_PATH = "/api/auth/github/callback"
+
+
+@dataclass(frozen=True)
+class GitHubOAuthIdentity:
+    provider_user_id: str
+    login: str
+    display_name: str
+    email: str | None = None
+
+
+def resolve_safe_post_login_redirect(value: str | None) -> str:
+    candidate = (value or "").strip()
+    if not candidate or "\\" in candidate or "\x00" in candidate:
+        return DEFAULT_POST_LOGIN_REDIRECT
+
+    parsed = urlsplit(candidate)
+    if parsed.scheme or parsed.netloc:
+        return DEFAULT_POST_LOGIN_REDIRECT
+    if not parsed.path.startswith("/") or parsed.path.startswith("//"):
+        return DEFAULT_POST_LOGIN_REDIRECT
+    if parsed.path.startswith("/login") or parsed.path.startswith("/api"):
+        return DEFAULT_POST_LOGIN_REDIRECT
+    return candidate
+
+
+def _request_is_secure(request: Request) -> bool:
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip().lower()
+    return forwarded_proto == "https" or request.url.scheme == "https"
+
+
+def _github_oauth_is_configured() -> bool:
+    settings = get_settings()
+    return bool(settings.github_oauth_client_id.strip() and settings.github_oauth_client_secret.strip())
+
+
+def _set_github_oauth_cookie(
+    response: Response,
+    request: Request,
+    *,
+    key: str,
+    value: str,
+) -> None:
+    response.set_cookie(
+        key=key,
+        value=value,
+        max_age=DEFAULT_OAUTH_STATE_TTL_SECONDS,
+        httponly=True,
+        secure=_request_is_secure(request),
+        samesite="lax",
+        path=GITHUB_OAUTH_CALLBACK_PATH,
+    )
+
+
+def _clear_github_oauth_cookies(response: Response) -> None:
+    response.delete_cookie(key=GITHUB_OAUTH_STATE_COOKIE_NAME, path=GITHUB_OAUTH_CALLBACK_PATH)
+    response.delete_cookie(key=GITHUB_OAUTH_PKCE_COOKIE_NAME, path=GITHUB_OAUTH_CALLBACK_PATH)
+
+
+def _build_login_redirect_url(*, oauth_error: str | None = None, redirect_to: str | None = None) -> str:
+    params: dict[str, str] = {}
+    if oauth_error:
+        params["oauth_error"] = oauth_error
+    safe_redirect = resolve_safe_post_login_redirect(redirect_to)
+    if safe_redirect != DEFAULT_POST_LOGIN_REDIRECT:
+        params["redirect_to"] = safe_redirect
+    if not params:
+        return "/login"
+    return f"/login?{urlencode(params)}"
+
+
+def _redirect_to_login_with_error(*, oauth_error: str, redirect_to: str | None = None) -> RedirectResponse:
+    response = RedirectResponse(
+        url=_build_login_redirect_url(oauth_error=oauth_error, redirect_to=redirect_to),
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+    _clear_github_oauth_cookies(response)
+    return response
+
+
+def _build_github_callback_uri(request: Request) -> str:
+    settings = get_settings()
+    configured_redirect = settings.github_oauth_redirect_uri.strip()
+    if configured_redirect:
+        return configured_redirect
+    return str(request.url_for("github_oauth_callback"))
+
+
+def _generate_github_pkce_verifier() -> str:
+    # RFC 7636 allows 43-128 characters from the unreserved URL charset.
+    return secrets.token_urlsafe(64)
+
+
+def _build_github_pkce_challenge(verifier: str) -> str:
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
+def _build_github_authorize_url(
+    request: Request,
+    *,
+    redirect_to: str,
+) -> tuple[str, str, str]:
+    settings = get_settings()
+    nonce = secrets.token_urlsafe(32)
+    state_token = create_oauth_state_token(
+        provider=AUTH_PROVIDER_GITHUB,
+        redirect_to=redirect_to,
+        nonce=nonce,
+    )
+    code_verifier = _generate_github_pkce_verifier()
+    params = urlencode(
+        {
+            "client_id": settings.github_oauth_client_id.strip(),
+            "redirect_uri": _build_github_callback_uri(request),
+            "scope": GITHUB_OAUTH_SCOPE,
+            "state": state_token,
+            "allow_signup": "true",
+            "code_challenge": _build_github_pkce_challenge(code_verifier),
+            "code_challenge_method": "S256",
+        }
+    )
+    return f"{GITHUB_OAUTH_AUTHORIZE_URL}?{params}", state_token, code_verifier
+
+
+def _github_json_request(
+    url: str,
+    *,
+    method: str = "GET",
+    data: dict[str, str] | None = None,
+    headers: dict[str, str] | None = None,
+) -> dict:
+    request_headers = {
+        "Accept": "application/json",
+        "User-Agent": "NovWr",
+    }
+    if headers:
+        request_headers.update(headers)
+
+    body = None
+    if data is not None:
+        request_headers["Content-Type"] = "application/x-www-form-urlencoded"
+        body = urlencode(data).encode("utf-8")
+
+    req = UrlRequest(url, data=body, headers=request_headers, method=method)
+    try:
+        with urlopen(req, timeout=10) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except HTTPError as exc:
+        response_body = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"GitHub OAuth HTTP {exc.code}: {response_body[:200]}") from exc
+    except URLError as exc:
+        raise RuntimeError("GitHub OAuth request failed") from exc
+
+    if not isinstance(payload, dict):
+        raise RuntimeError("GitHub OAuth response was not a JSON object")
+    return payload
+
+
+def exchange_github_code_for_identity(
+    *,
+    request: Request,
+    code: str,
+    code_verifier: str,
+) -> GitHubOAuthIdentity:
+    settings = get_settings()
+    token_payload = _github_json_request(
+        GITHUB_OAUTH_TOKEN_URL,
+        method="POST",
+        data={
+            "client_id": settings.github_oauth_client_id.strip(),
+            "client_secret": settings.github_oauth_client_secret.strip(),
+            "code": code,
+            "redirect_uri": _build_github_callback_uri(request),
+            "code_verifier": code_verifier,
+        },
+    )
+    oauth_error = token_payload.get("error")
+    if isinstance(oauth_error, str) and oauth_error:
+        raise RuntimeError(f"GitHub OAuth token exchange failed: {oauth_error}")
+
+    access_token = token_payload.get("access_token")
+    if not isinstance(access_token, str) or not access_token:
+        raise RuntimeError("GitHub OAuth token response did not include an access token")
+
+    profile_payload = _github_json_request(
+        GITHUB_OAUTH_USER_URL,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+
+    provider_user_id = profile_payload.get("id")
+    login = str(profile_payload.get("login") or "").strip()
+    email_value = profile_payload.get("email")
+    email = str(email_value).strip() if isinstance(email_value, str) else None
+    display_name = str(profile_payload.get("name") or login).strip() or login
+
+    if provider_user_id in (None, "") or not login:
+        raise RuntimeError("GitHub OAuth profile response was missing a stable user identity")
+
+    return GitHubOAuthIdentity(
+        provider_user_id=str(provider_user_id),
+        login=login,
+        display_name=display_name,
+        email=email or None,
+    )
+
+
 @router.post("/register", response_model=TokenResponse, status_code=201)
 def register(body: RegisterRequest, db: Session = Depends(get_db)):
     settings = get_settings()
-    # Pre-launch hosted is invite-only by design; selfhost uses the default user flow.
+    # Pre-launch hosted auth is admission-gated at the login surface; selfhost uses the default user flow.
     raise HTTPException(
         status_code=405,
         detail=(
-            "Registration disabled in hosted mode; use invite code login"
+            "Registration disabled in hosted mode; use invite code or GitHub login"
             if settings.deploy_mode == "hosted"
             else "Registration disabled in selfhost mode"
         ),
@@ -99,49 +329,119 @@ def invite_register(body: InviteRequest, request: Request, response: Response, d
     if not nickname:
         raise HTTPException(status_code=422, detail="nickname cannot be empty")
 
-    with hosted_signup_lock(db):
-        # Durable re-login: if this nickname already exists, treat invite as a login.
-        #
-        # This prevents users from being forced into new accounts when JWT expires, and
-        # prevents quota resets on re-login.
-        existing = db.query(User).filter(User.nickname == nickname).order_by(User.created_at.asc()).first()
-        if existing is not None:
-            if not existing.is_active:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account disabled")
-            existing_username = existing.username
-            db.rollback()
-            token = create_access_token({"sub": existing_username})
-            set_auth_cookie(response, request, token)
-            return TokenResponse(access_token=token)
-
-        ensure_hosted_user_capacity(db)
-
-        suffix = secrets.token_hex(4)
-        max_prefix = max(1, 150 - (1 + len(suffix)))
-        username = f"{nickname[:max_prefix]}_{suffix}"
-
-        user = User(
-            username=username,
-            nickname=nickname,
-            hashed_password=hash_password(secrets.token_hex(16)),
-            generation_quota=settings.initial_quota,
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    record_event(db, user.id, "signup")
-
-    # Seed demo novel for new user (best-effort; failure doesn't block signup).
-    try:
-        from app.core.seed_demo import seed_demo_novel
-        seed_demo_novel(db, user)
-    except Exception:
-        import logging
-        logging.getLogger(__name__).exception("Failed to seed demo novel for user %s", user.id)
-
-    token = create_access_token({"sub": user.username})
-    set_auth_cookie(response, request, token)
+    user, _created = resolve_or_provision_hosted_user_for_identity(
+        db,
+        provider=AUTH_PROVIDER_INVITE,
+        provider_user_id=nickname,
+        nickname=nickname,
+        username_seed=nickname,
+        provider_login=nickname,
+    )
+    token = issue_user_session(response=response, request=request, user=user)
     return TokenResponse(access_token=token)
+
+
+@router.get("/github/start", include_in_schema=False)
+def github_oauth_start(request: Request, redirect_to: str | None = None):
+    settings = get_settings()
+    if settings.deploy_mode == "selfhost":
+        raise HTTPException(status_code=405, detail="GitHub OAuth disabled in selfhost mode")
+
+    safe_redirect = resolve_safe_post_login_redirect(redirect_to)
+    if not _github_oauth_is_configured():
+        return _redirect_to_login_with_error(
+            oauth_error="github_oauth_not_configured",
+            redirect_to=safe_redirect,
+        )
+
+    authorize_url, state_token, code_verifier = _build_github_authorize_url(
+        request,
+        redirect_to=safe_redirect,
+    )
+    response = RedirectResponse(url=authorize_url, status_code=status.HTTP_302_FOUND)
+    _set_github_oauth_cookie(
+        response,
+        request,
+        key=GITHUB_OAUTH_STATE_COOKIE_NAME,
+        value=state_token,
+    )
+    _set_github_oauth_cookie(
+        response,
+        request,
+        key=GITHUB_OAUTH_PKCE_COOKIE_NAME,
+        value=code_verifier,
+    )
+    return response
+
+
+@router.get("/github/callback", name="github_oauth_callback", include_in_schema=False)
+def github_oauth_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    db: Session = Depends(get_db),
+):
+    settings = get_settings()
+    if settings.deploy_mode == "selfhost":
+        raise HTTPException(status_code=405, detail="GitHub OAuth disabled in selfhost mode")
+    if not _github_oauth_is_configured():
+        return _redirect_to_login_with_error(oauth_error="github_oauth_not_configured")
+
+    try:
+        cookie_state = request.cookies.get(GITHUB_OAUTH_STATE_COOKIE_NAME)
+        if not state or not cookie_state or state != cookie_state:
+            raise ValueError("GitHub OAuth state mismatch")
+        state_payload = decode_oauth_state_token(token=state, provider=AUTH_PROVIDER_GITHUB)
+        redirect_to = resolve_safe_post_login_redirect(state_payload["redirect_to"])
+        code_verifier = request.cookies.get(GITHUB_OAUTH_PKCE_COOKIE_NAME)
+        if not code_verifier:
+            raise ValueError("GitHub OAuth PKCE verifier missing")
+    except ValueError:
+        return _redirect_to_login_with_error(oauth_error="github_oauth_state_invalid")
+
+    if error:
+        oauth_error = "github_oauth_access_denied" if error == "access_denied" else "github_oauth_failed"
+        return _redirect_to_login_with_error(oauth_error=oauth_error, redirect_to=redirect_to)
+    if not code:
+        return _redirect_to_login_with_error(oauth_error="github_oauth_failed", redirect_to=redirect_to)
+
+    try:
+        identity = exchange_github_code_for_identity(
+            request=request,
+            code=code,
+            code_verifier=code_verifier,
+        )
+        user, _created = resolve_or_provision_hosted_user_for_identity(
+            db,
+            provider=AUTH_PROVIDER_GITHUB,
+            provider_user_id=identity.provider_user_id,
+            nickname=identity.display_name,
+            username_seed=identity.login,
+            provider_login=identity.login,
+            provider_email=identity.email,
+        )
+    except HTTPException as exc:
+        if exc.status_code == 503 and isinstance(exc.detail, dict) and exc.detail.get("code") == "hosted_user_cap_reached":
+            return _redirect_to_login_with_error(
+                oauth_error="github_oauth_signup_blocked",
+                redirect_to=redirect_to,
+            )
+        if exc.status_code == 403:
+            return _redirect_to_login_with_error(
+                oauth_error="github_oauth_account_disabled",
+                redirect_to=redirect_to,
+            )
+        logger.warning("GitHub OAuth callback returned HTTP %s", exc.status_code)
+        return _redirect_to_login_with_error(oauth_error="github_oauth_failed", redirect_to=redirect_to)
+    except Exception:
+        logger.exception("GitHub OAuth callback failed")
+        return _redirect_to_login_with_error(oauth_error="github_oauth_failed", redirect_to=redirect_to)
+
+    response = RedirectResponse(url=redirect_to, status_code=status.HTTP_303_SEE_OTHER)
+    _clear_github_oauth_cookies(response)
+    issue_user_session(response=response, request=request, user=user)
+    return response
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -150,8 +450,7 @@ def login(request: Request, response: Response, form: OAuth2PasswordRequestForm 
     if settings.deploy_mode == "selfhost":
         from app.core.auth import _get_or_create_default_user
         user = _get_or_create_default_user(db)
-        token = create_access_token({"sub": user.username})
-        set_auth_cookie(response, request, token)
+        token = issue_user_session(response=response, request=request, user=user)
         return TokenResponse(access_token=token)
 
     user = db.query(User).filter(User.username == form.username).first()
@@ -159,8 +458,7 @@ def login(request: Request, response: Response, form: OAuth2PasswordRequestForm 
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account disabled")
-    token = create_access_token({"sub": user.username})
-    set_auth_cookie(response, request, token)
+    token = issue_user_session(response=response, request=request, user=user)
     return TokenResponse(access_token=token)
 
 
@@ -309,7 +607,7 @@ def export_feedback(
 
 EVENT_CATALOG = {
     "signup": {
-        "description": "User registered via invite code",
+        "description": "User registered via a hosted auth provider",
         "funnel_position": 1,
         "question": "How many people entered the product?",
     },

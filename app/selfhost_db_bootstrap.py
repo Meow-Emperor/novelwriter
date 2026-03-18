@@ -51,6 +51,14 @@ _LEGACY_TABLES = {
 }
 _REQUIRED_SCHEMA_COLUMNS: dict[str, set[str]] = {
     "chapters": {"source_chapter_label", "source_chapter_number"},
+    "auth_identities": {
+        "user_id",
+        "provider",
+        "provider_user_id",
+        "provider_login",
+        "provider_email",
+        "last_login_at",
+    },
     "novels": {
         "owner_id",
         "window_index",
@@ -85,12 +93,14 @@ _UNVERSIONED_AUTO_UPGRADE_BASELINES: tuple[tuple[str, dict[str, set[str]]], ...]
     (
         _PRE_CHAPTER_SOURCE_METADATA_REVISION,
         {
+            "auth_identities": _REQUIRED_SCHEMA_COLUMNS["auth_identities"],
             "chapters": _REQUIRED_SCHEMA_COLUMNS["chapters"],
         },
     ),
     (
         _PRE_DERIVED_ASSET_JOB_REVISION,
         {
+            "auth_identities": _REQUIRED_SCHEMA_COLUMNS["auth_identities"],
             "chapters": _REQUIRED_SCHEMA_COLUMNS["chapters"],
             "derived_asset_jobs": _REQUIRED_SCHEMA_COLUMNS["derived_asset_jobs"],
         },
@@ -98,6 +108,7 @@ _UNVERSIONED_AUTO_UPGRADE_BASELINES: tuple[tuple[str, dict[str, set[str]]], ...]
     (
         _PRE_NOVEL_LANGUAGE_REVISION,
         {
+            "auth_identities": _REQUIRED_SCHEMA_COLUMNS["auth_identities"],
             "novels": {
                 "language",
                 "window_index_status",
