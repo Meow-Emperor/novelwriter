@@ -3,6 +3,7 @@ import { Check, Redo2, Undo2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { NwButton } from '@/components/ui/nw-button'
 import { GlassCard } from '@/components/GlassCard'
+import { useUiLocale } from '@/contexts/UiLocaleContext'
 
 export type AutoSaveStatus = 'saved' | 'unsaved' | 'idle'
 
@@ -61,6 +62,7 @@ export function ChapterEditor({
   onSave: () => void
   warningTerms?: { code: string; term: string }[]
 }) {
+  const { t } = useUiLocale()
   const wordCount = value.replace(/\s/g, '').length
 
   // Track last-found offset per term so repeated clicks cycle through occurrences
@@ -89,7 +91,7 @@ export function ChapterEditor({
           onClick={onUndo}
           variant="ghost"
           className="w-8 h-8 rounded-md"
-          title="撤销"
+          title={t('editor.undo')}
         >
           <Undo2 size={16} />
         </NwButton>
@@ -97,7 +99,7 @@ export function ChapterEditor({
           onClick={onRedo}
           variant="ghost"
           className="w-8 h-8 rounded-md"
-          title="重做"
+          title={t('editor.redo')}
         >
           <Redo2 size={16} />
         </NwButton>
@@ -105,7 +107,7 @@ export function ChapterEditor({
 
       {warningTerms && warningTerms.length > 0 && (
         <div className="flex items-center gap-2 px-4 py-2 border-b border-[var(--nw-glass-border)]">
-          <span className="text-xs text-muted-foreground shrink-0">漂移警告</span>
+          <span className="text-xs text-muted-foreground shrink-0">{t('editor.driftWarning')}</span>
           <div className="flex flex-wrap gap-1.5">
             {warningTerms.map(w => (
               <button
@@ -133,8 +135,8 @@ export function ChapterEditor({
 
       <div className="flex items-center justify-between px-4 py-2 border-t border-[var(--nw-glass-border)]">
         <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          <span>{wordCount.toLocaleString()} 字</span>
-          <span>第 {cursorInfo.para} 段 · 第 {cursorInfo.col} 列</span>
+          <span>{t('editor.charCount', { count: wordCount.toLocaleString() })}</span>
+          <span>{t('editor.cursorPosition', { para: cursorInfo.para, col: cursorInfo.col })}</span>
           <span className="inline-flex items-center gap-1.5">
             {autoSaveStatus !== 'idle' ? (
               <>
@@ -147,7 +149,7 @@ export function ChapterEditor({
                   )}
                 />
                 <span>
-                  {autoSaveStatus === 'saved' ? '已自动保存' : '未保存更改'}
+                  {autoSaveStatus === 'saved' ? t('editor.autoSaved') : t('editor.unsaved')}
                 </span>
               </>
             ) : null}
@@ -160,7 +162,7 @@ export function ChapterEditor({
             variant="glass"
             className="rounded-lg px-3 py-1.5 text-sm"
           >
-            取消
+            {t('dialog.cancel')}
           </NwButton>
           <NwButton
             onClick={onSave}
@@ -168,7 +170,7 @@ export function ChapterEditor({
             className="rounded-lg px-3 py-1.5 text-sm font-semibold shadow-[0_0_18px_hsl(var(--accent)/0.25)]"
           >
             <Check size={14} />
-            保存
+            {t('editor.save')}
           </NwButton>
         </div>
       </div>

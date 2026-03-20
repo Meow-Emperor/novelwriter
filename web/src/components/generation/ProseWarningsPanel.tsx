@@ -5,21 +5,21 @@ import { useState } from 'react'
 import { AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { renderWarningMessage } from '@/lib/warningMessages'
+import { useUiLocale } from '@/contexts/UiLocaleContext'
 import type { ProseWarning } from '@/types/api'
 
-const RULE_CODE_LABELS: Record<string, string> = {
-  repeated_ngram: '重复短语',
-  long_paragraph: '段落过长',
-  abnormal_sentence_length: '句子过长',
-  summary_tone: '总结式语气',
-}
-
-function ruleLabel(code: string): string {
-  return RULE_CODE_LABELS[code] ?? code
-}
-
 export function ProseWarningsPanel({ warnings }: { warnings: ProseWarning[] }) {
+  const { t } = useUiLocale()
   const [isOpen, setIsOpen] = useState(false)
+
+  const ruleCodeLabels: Record<string, string> = {
+    repeated_ngram: t('prose.repeatedNgram'),
+    long_paragraph: t('prose.longParagraph'),
+    abnormal_sentence_length: t('prose.abnormalSentenceLength'),
+    summary_tone: t('prose.summaryTone'),
+  }
+
+  const ruleLabel = (code: string): string => ruleCodeLabels[code] ?? code
   const groupedWarnings = warnings.reduce<Map<string, ProseWarning[]>>((groups, warning) => {
     const existing = groups.get(warning.code)
     if (existing) {
@@ -60,7 +60,7 @@ export function ProseWarningsPanel({ warnings }: { warnings: ProseWarning[] }) {
               isOpen ? 'text-[hsl(var(--color-status-draft))]' : 'text-muted-foreground',
             )}
           >
-            文本质量检查（{warnings.length} 项提示）
+            {t('prose.checkTitle', { count: warnings.length })}
           </span>
         </div>
         {isOpen ? (
@@ -79,7 +79,7 @@ export function ProseWarningsPanel({ warnings }: { warnings: ProseWarning[] }) {
                   {ruleLabel(code)}
                 </span>
                 <span className="text-[11px] text-muted-foreground">
-                  {items.length} 项
+                  {t('prose.itemCount', { count: items.length })}
                 </span>
               </div>
 
@@ -91,7 +91,7 @@ export function ProseWarningsPanel({ warnings }: { warnings: ProseWarning[] }) {
                   <div className="flex items-center gap-2">
                     {warning.version != null ? (
                       <span className="inline-flex items-center rounded-full border border-[var(--nw-glass-border)] px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                        候选 {warning.version}
+                        {t('prose.candidate', { n: warning.version })}
                       </span>
                     ) : null}
                   </div>

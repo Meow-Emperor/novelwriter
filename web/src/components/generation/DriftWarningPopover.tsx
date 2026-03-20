@@ -1,11 +1,5 @@
 import { GlassSurface } from '@/components/ui/glass-surface'
-
-const WARNING_LABELS: Record<string, string> = {
-  unknown_term_quoted: '未知名词',
-  unknown_term_bracketed: '未知名词',
-  unknown_term_named: '未知称谓',
-  unknown_address_token: '未知称谓',
-}
+import { useUiLocale } from '@/contexts/UiLocaleContext'
 
 export function DriftWarningPopover({
   code,
@@ -16,7 +10,13 @@ export function DriftWarningPopover({
   term: string
   onDismiss: () => void
 }) {
-  const label = WARNING_LABELS[code] ?? '未知词汇'
+  const { t } = useUiLocale()
+
+  const label = code === 'unknown_term_quoted' || code === 'unknown_term_bracketed'
+    ? t('drift.unknownTerm')
+    : code === 'unknown_term_named' || code === 'unknown_address_token'
+    ? t('drift.unknownNaming')
+    : t('drift.unknownDefault')
 
   return (
     <GlassSurface
@@ -32,7 +32,7 @@ export function DriftWarningPopover({
         onClick={onDismiss}
         className="text-xs text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-sm px-1"
       >
-        忽略
+        {t('drift.dismiss')}
       </button>
     </GlassSurface>
   )

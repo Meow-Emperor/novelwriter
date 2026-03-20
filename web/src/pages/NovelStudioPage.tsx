@@ -22,6 +22,7 @@ import { useWorldSystems } from '@/hooks/world/useSystems'
 import { useBootstrapStatus, useTriggerBootstrap } from '@/hooks/world/useBootstrap'
 import { WorldGenerationDialog } from '@/components/world-model/shared/WorldGenerationDialog'
 import { LABELS } from '@/constants/labels'
+import { useUiLocale } from '@/contexts/UiLocaleContext'
 import { formatRelativeTime } from '@/lib/formatRelativeTime'
 import { downloadTextFile } from '@/lib/downloadTextFile'
 import {
@@ -107,6 +108,7 @@ export function NovelStudioPage() {
     studioResultsDebug?: ContinueDebugSummary | null
   } | null
   const novelId = Number(novelIdParam)
+  const { t } = useUiLocale()
   const { routeState } = useNovelShell()
   const { isOpen: isWorkbenchOpen, focusedSessionId, openDrawer } = useNovelCopilot()
   const activeStage = routeState.stage ?? 'chapter'
@@ -282,7 +284,7 @@ export function NovelStudioPage() {
       const allChapters = await api.listChapters(novelId)
       const content = serializeChaptersToPlainText(allChapters)
       downloadTextFile(
-        `${novel?.title ?? 'novel'}_全部章节_${new Date().toISOString().slice(0, 10)}.txt`,
+        `${novel?.title ?? 'novel'}_all_chapters_${new Date().toISOString().slice(0, 10)}.txt`,
         content
       )
     } catch { /* ignore */ }
@@ -309,7 +311,7 @@ export function NovelStudioPage() {
 
   const handleDeleteChapter = () => {
     if (activeChapterNum === null) return
-    if (!window.confirm(`确定要删除${activeChapterReference ?? `第 ${activeChapterNum} 章`}吗？此操作无法撤销。`)) return
+    if (!window.confirm(t('studio.chapter.deleteConfirm', { chapter: activeChapterReference ?? `Ch. ${activeChapterNum}` }))) return
     deleteChapter.mutate(activeChapterNum, {
       onSuccess: () => {
         cancelAutoSave()
@@ -650,14 +652,14 @@ export function NovelStudioPage() {
   if (novelLoading) {
     return (
       <PageShell showNavbar={false} className="h-screen" mainClassName="items-center justify-center">
-        <span className="text-sm text-muted-foreground">加载中...</span>
+        <span className="text-sm text-muted-foreground">{t('studio.loading')}</span>
       </PageShell>
     )
   }
   if (!novel) {
     return (
       <PageShell showNavbar={false} className="h-screen" mainClassName="items-center justify-center">
-        <span className="text-sm text-[hsl(var(--color-warning))]">作品不存在</span>
+        <span className="text-sm text-[hsl(var(--color-warning))]">{t('studio.novelNotFound')}</span>
       </PageShell>
     )
   }
@@ -848,7 +850,7 @@ export function NovelStudioPage() {
                               {formatChapterBadgeLabel(currentChapterIdentity ?? currentMeta)}
                             </span>
                             <span className="inline-flex items-center rounded-full border border-[var(--nw-glass-border)] bg-background/20 px-2.5 py-1 text-[11px] text-muted-foreground">
-                              {editMode ? '编辑中' : '阅读中'}
+                              {editMode ? t('studio.chapter.editing') : t('studio.chapter.reading')}
                             </span>
                           </div>
 
@@ -861,12 +863,12 @@ export function NovelStudioPage() {
                                 onBlur={() => { handleTitleSave() }}
                                 onKeyDown={e => { if (e.key === 'Enter') handleTitleSave(); if (e.key === 'Escape') setEditingTitle(false) }}
                                 className="w-full max-w-[720px] font-mono text-[22px] font-semibold text-foreground bg-[var(--nw-glass-bg)] border border-[hsl(var(--accent)/0.35)] rounded-md px-2 py-1 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-0"
-                                placeholder="输入章节标题"
+                                placeholder={t('studio.chapter.titlePlaceholder')}
                               />
                             ) : (
                               <div
                                 onDoubleClick={() => { setTitleDraft(displayTitle); setEditingTitle(true) }}
-                                title="双击编辑标题"
+                                title={t('studio.chapter.titleEditHint')}
                                 className="cursor-text"
                               >
                                 {displayTitle ? (
@@ -874,26 +876,26 @@ export function NovelStudioPage() {
                                     {displayTitle}
                                   </h1>
                                 ) : (
-                                  <span className="text-[22px] text-muted-foreground italic">双击添加标题</span>
+                                  <span className="text-[22px] text-muted-foreground italic">{t('studio.chapter.titleAddHint')}</span>
                                 )}
                               </div>
                             )}
                           </div>
 
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                            <span>{wordCount.toLocaleString()} 字</span>
+                            <span>{t('studio.chapter.charCount', { count: wordCount.toLocaleString() })}</span>
                             {currentMeta.created_at ? (
-                              <span>{formatRelativeTime(currentMeta.created_at)}更新</span>
+                              <span>{t('studio.chapter.updated', { time: formatRelativeTime(currentMeta.created_at) })}</span>
                             ) : null}
                           </div>
                         </>
                       ) : (
                         <div className="space-y-2">
                           <span className="inline-flex items-center rounded-full border border-[var(--nw-glass-border)] bg-background/20 px-2.5 py-1 text-[11px] text-muted-foreground">
-                            章节工作台
+                            {t('studio.header.workspace')}
                           </span>
                           <h1 className="font-mono text-[24px] font-semibold leading-tight text-foreground">
-                            选择章节
+                            {t('studio.header.selectChapter')}
                           </h1>
                         </div>
                       )}
@@ -917,7 +919,7 @@ export function NovelStudioPage() {
                           className="rounded-[10px] px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
                         >
                           <Pencil size={14} />
-                          编辑
+                          {t('studio.chapter.edit')}
                         </NwButton>
 
                         <div className="relative">
@@ -927,8 +929,8 @@ export function NovelStudioPage() {
                             className="h-10 w-10 rounded-[10px] p-0 text-sm font-medium"
                             aria-haspopup="menu"
                             aria-expanded={showMoreActions}
-                            aria-label="更多操作"
-                            title="更多操作"
+                            aria-label={t('studio.actions.moreActions')}
+                            title={t('studio.actions.moreActions')}
                           >
                             <MoreHorizontal size={14} />
                           </NwButton>
@@ -952,7 +954,7 @@ export function NovelStudioPage() {
                                   className="flex w-full items-center gap-2.5 rounded-[12px] px-3 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-[var(--nw-glass-bg-hover)]"
                                 >
                                   <Upload size={14} className="text-muted-foreground" />
-                                  <span>导出全部章节</span>
+                                  <span>{t('studio.actions.exportAllChapters')}</span>
                                 </button>
 
                                 {activeChapterNum !== null && chaptersMeta.length > 1 ? (
@@ -967,7 +969,7 @@ export function NovelStudioPage() {
                                       className="flex w-full items-center gap-2.5 rounded-[12px] px-3 py-2.5 text-left text-sm text-[hsl(var(--color-danger))] transition-colors hover:bg-[hsl(var(--color-danger)/0.10)]"
                                     >
                                       <Trash2 size={14} />
-                                      <span>删除章节</span>
+                                      <span>{t('studio.chapter.delete')}</span>
                                     </button>
                                   </>
                                 ) : null}

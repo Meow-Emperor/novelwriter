@@ -19,6 +19,7 @@ import {
 } from '@/components/novel-shell/NovelShellRouteState'
 import { api, streamContinuation, ApiError } from '@/services/api'
 import { useAuth } from '@/contexts/AuthContext'
+import { useUiLocale } from '@/contexts/UiLocaleContext'
 import { downloadTextFile } from '@/lib/downloadTextFile'
 import { cn } from '@/lib/utils'
 import type { ContinueDebugSummary, ContinueRequest, ContinueResponse, Continuation, PostcheckWarning, ProseWarning } from '@/types/api'
@@ -48,6 +49,7 @@ export function ContinuationResultsStage({
   const navigate = useNavigate()
   const location = useLocation()
   const { user, refreshQuota } = useAuth()
+  const { t } = useUiLocale()
   const state = location.state as {
     streamParams?: ContinueRequest
     novelId?: number
@@ -254,15 +256,15 @@ export function ContinuationResultsStage({
         if (abortRef.current || ctrl.signal.aborted) return
         if (err instanceof ApiError && err.status === 429) {
           setIsQuotaExhausted(true)
-          setStreamError('生成额度已用完')
+          setStreamError(t('continuation.results.quotaExhausted'))
         } else if (err instanceof ApiError) {
           const llmMessage = getLlmApiErrorMessage(err)
           if (llmMessage) {
             setStreamError(llmMessage)
           } else if (err.status === 503) {
-            setStreamError('当前使用人数较多，请稍后再试')
+            setStreamError(t('continuation.results.serviceBusy'))
           } else {
-            setStreamError(`请求失败（HTTP ${err.status}）`)
+            setStreamError(t('continuation.results.requestFailed', { status: err.status }))
           }
         } else {
           setStreamError(err instanceof Error ? err.message : 'Stream failed')
@@ -275,7 +277,7 @@ export function ContinuationResultsStage({
       abortRef.current = true
       ctrl.abort()
     }
-  }, [activeChapterNum, navigate, streamAttempt, streamCtx])
+  }, [activeChapterNum, navigate, streamAttempt, streamCtx, t])
 
   useEffect(() => {
     if (!isReloadMode || !persisted) return
@@ -365,9 +367,9 @@ export function ContinuationResultsStage({
     const versions = isStreamMode ? variants : nonStreamVersions
     if (versions.length === 0) return
     const content = versions
-      .map((variant, index) => `========== 版本 ${index + 1} ==========\n\n${variant.content}\n`)
+      .map((variant, index) => `${t('continuation.results.exportVersionHeader', { n: index + 1 })}\n\n${variant.content}\n`)
       .join('\n\n')
-    downloadTextFile(`续写版本_${new Date().toISOString().slice(0, 10)}.txt`, content)
+    downloadTextFile(`continuation_versions_${new Date().toISOString().slice(0, 10)}.txt`, content)
   }
 
   const handleFeedbackSubmit = async (answers: FeedbackAnswers) => {
@@ -389,7 +391,7 @@ export function ContinuationResultsStage({
       return (
         <div className="flex flex-1 items-center justify-center flex-col gap-4">
           <Loader2 size={24} className="animate-spin text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">正在加载续写结果...</span>
+          <span className="text-sm text-muted-foreground">{t('continuation.results.loading')}</span>
         </div>
       )
     }
@@ -404,14 +406,14 @@ export function ContinuationResultsStage({
               variant="accent"
               className="rounded-[10px] px-5 py-2.5 text-sm font-semibold shadow-[0_0_18px_hsl(var(--accent)/0.25)]"
             >
-              重试
+              {t('continuation.results.retry')}
             </NwButton>
             <NwButton
               onClick={() => navigate(`/novel/${novelId}`, { state: null })}
               variant="glass"
               className="rounded-[10px] px-5 py-2.5 text-sm font-semibold"
             >
-              返回
+              {t('continuation.results.back')}
             </NwButton>
           </div>
         </div>
@@ -420,13 +422,13 @@ export function ContinuationResultsStage({
 
     return (
       <div className="flex flex-1 items-center justify-center flex-col gap-4">
-        <span className="text-sm text-muted-foreground">未找到续写结果，请从工作区重新生成。</span>
+        <span className="text-sm text-muted-foreground">{t('continuation.results.noResults')}</span>
         <NwButton
           onClick={() => navigate(`/novel/${novelId}`, { state: null })}
           variant="accent"
           className="rounded-[10px] px-5 py-2.5 text-sm font-semibold shadow-[0_0_18px_hsl(var(--accent)/0.25)]"
         >
-          返回工作区
+          {t('continuation.results.returnToWorkspace')}
         </NwButton>
       </div>
     )
@@ -440,28 +442,28 @@ export function ContinuationResultsStage({
 
           {isQuotaExhausted && !user?.feedback_submitted ? (
             <div className="flex flex-col items-center gap-3 max-w-md text-center">
-              <p className="text-sm text-muted-foreground">提交使用反馈即可获得额外生成额度，立即继续创作。</p>
+              <p className="text-sm text-muted-foreground">{t('continuation.results.quotaFeedback')}</p>
               <NwButton
                 onClick={() => setShowFeedbackForm(true)}
                 variant="accent"
                 className="rounded-[10px] px-6 py-2.5 text-sm font-semibold shadow-[0_0_18px_hsl(var(--accent)/0.25)]"
               >
                 <MessageSquarePlus size={16} />
-                提交反馈，解锁额度
+                {t('continuation.results.submitFeedbackUnlock')}
               </NwButton>
             </div>
           ) : null}
 
           {isQuotaExhausted && user?.feedback_submitted ? (
             <div className="flex flex-col items-center gap-3 max-w-md text-center">
-              <p className="text-sm text-muted-foreground">反馈额度已领取。你可以在设置中配置自己的 API Key 继续使用。</p>
+              <p className="text-sm text-muted-foreground">{t('continuation.results.feedbackAlreadyClaimed')}</p>
               <NwButton
                 onClick={() => navigate('/settings')}
                 variant="accent"
                 className="rounded-[10px] px-6 py-2.5 text-sm font-semibold shadow-[0_0_18px_hsl(var(--accent)/0.25)]"
               >
                 <Settings size={16} />
-                前往设置
+                {t('continuation.results.goToSettings')}
               </NwButton>
             </div>
           ) : null}
@@ -473,14 +475,14 @@ export function ContinuationResultsStage({
                 variant="accent"
                 className="rounded-[10px] px-5 py-2.5 text-sm font-semibold shadow-[0_0_18px_hsl(var(--accent)/0.25)]"
               >
-                重试
+                {t('continuation.results.retry')}
               </NwButton>
               <NwButton
                 onClick={() => navigate(`/novel/${novelId}?stage=write`, { state: null })}
                 variant="glass"
                 className="rounded-[10px] px-5 py-2.5 text-sm font-semibold"
               >
-                返回
+                {t('continuation.results.back')}
               </NwButton>
             </div>
           ) : null}
@@ -491,7 +493,7 @@ export function ContinuationResultsStage({
               variant="glass"
               className="rounded-[10px] px-5 py-2.5 text-sm font-semibold"
             >
-              返回工作区
+              {t('continuation.results.returnToWorkspace')}
             </NwButton>
           ) : null}
         </div>
@@ -515,17 +517,17 @@ export function ContinuationResultsStage({
             <div className="min-w-0 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center rounded-full border border-[var(--nw-glass-border)] bg-background/20 px-2.5 py-1 text-[11px] font-medium text-foreground/88">
-                  续写结果
+                  {t('continuation.results.badge')}
                 </span>
                 {activeChapterNum !== null ? (
                 <span className="inline-flex items-center rounded-full border border-[var(--nw-glass-border)] bg-background/20 px-2.5 py-1 text-[11px] text-muted-foreground">
-                    {(activeChapterReference ?? `第 ${activeChapterNum} 章`)}续写
+                    {t('continuation.results.continuationOf', { chapter: activeChapterReference ?? `Ch. ${activeChapterNum}` })}
                   </span>
                 ) : null}
                 {isStreamMode && !isDone ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--accent)/0.3)] bg-[hsl(var(--accent)/0.08)] px-2.5 py-1 text-[11px] text-accent">
                     <Loader2 size={10} className="animate-spin" />
-                    生成中
+                    {t('continuation.results.generating')}
                   </span>
                 ) : null}
               </div>
@@ -540,7 +542,7 @@ export function ContinuationResultsStage({
                 className="rounded-[10px] px-5 py-2.5 text-sm font-semibold shadow-[0_0_18px_hsl(var(--accent)/0.25)] disabled:cursor-default"
               >
                 <Check size={16} />
-                采纳此版本
+                {t('continuation.results.adopt')}
               </NwButton>
 
               <NwButton
@@ -549,7 +551,7 @@ export function ContinuationResultsStage({
                 className="rounded-[10px] px-4 py-2 text-sm font-medium"
               >
                 <RefreshCw size={14} />
-                重新生成
+                {t('continuation.results.regenerate')}
               </NwButton>
 
               <NwButton
@@ -559,7 +561,7 @@ export function ContinuationResultsStage({
                 className="rounded-[10px] px-4 py-2 text-sm font-medium"
               >
                 <Upload size={14} />
-                导出全部
+                {t('continuation.results.exportAll')}
               </NwButton>
             </div>
           </div>
@@ -586,7 +588,7 @@ export function ContinuationResultsStage({
                       : 'border-b-transparent text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  版本 {index + 1}
+                  {t('continuation.results.version', { n: index + 1 })}
                   {isVariantStreaming ? <Loader2 size={14} className="animate-spin" /> : null}
                   {hasError ? <span className="text-destructive text-xs">!</span> : null}
                   {isVariantDone && !isVariantStreaming && !hasError && isStreamMode ? (
@@ -612,7 +614,7 @@ export function ContinuationResultsStage({
                   variant="accent"
                   className="rounded-[10px] px-5 py-2.5 text-sm font-semibold shadow-[0_0_18px_hsl(var(--accent)/0.25)]"
                 >
-                  重试
+                  {t('continuation.results.retry')}
                 </NwButton>
               </div>
             </div>
@@ -620,7 +622,7 @@ export function ContinuationResultsStage({
             <PlainTextContent
               content={currentVariant.content}
               className="flex-1 min-h-0 overflow-y-auto nw-scrollbar-thin"
-              emptyLabel="暂无内容"
+              emptyLabel={t('continuation.results.emptyContent')}
               annotations={driftAnnotations}
             />
           ) : currentVariant.isStreaming || !currentVariant.continuationId ? (
@@ -631,14 +633,14 @@ export function ContinuationResultsStage({
             <PlainTextContent
               content=""
               className="flex-1 min-h-0 overflow-y-auto nw-scrollbar-thin"
-              emptyLabel="暂无内容"
+              emptyLabel={t('continuation.results.emptyContent')}
             />
           )
         ) : (
           <PlainTextContent
             content={currentLegacyVersion?.content}
             className="flex-1 min-h-0 overflow-y-auto nw-scrollbar-thin"
-            emptyLabel="暂无内容"
+            emptyLabel={t('continuation.results.emptyContent')}
             annotations={driftAnnotations}
           />
         )}
@@ -657,7 +659,7 @@ export function ContinuationResultsStage({
             <div className="flex items-center gap-2 min-w-0">
               <Info size={14} className={showInjectionSummaryRail ? 'text-accent' : 'text-muted-foreground'} />
               <span className={cn('text-xs truncate', showInjectionSummaryRail ? 'text-accent' : 'text-muted-foreground')}>
-                注入摘要({summary.entities} 个实体,{summary.relationships} 个关系,{summary.systems} 个系统)
+                {t('continuation.results.injectionSummary', { entities: summary.entities, relationships: summary.relationships, systems: summary.systems })}
               </span>
             </div>
             {showInjectionSummaryRail ? (

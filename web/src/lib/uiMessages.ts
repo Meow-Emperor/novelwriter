@@ -310,6 +310,91 @@ const worldModelZhMessages = {
   'worldModel.onboarding.dismiss': '前往世界模型页稍后添加 →',
 } as const satisfies Record<string, UiMessageValue>
 
+const continuationZhMessages = {
+  // -- Continuation Setup Stage --
+  'continuation.setup.basedOn': ({ chapter }: UiMessageParams) => `基于${String(chapter ?? '')}继续`,
+  'continuation.setup.charCount': ({ count }: UiMessageParams) => `${String(count ?? 0)} 字`,
+  'continuation.setup.loadingChapter': '加载章节内容...',
+  'continuation.setup.emptyChapter': '章节暂无内容',
+  'continuation.setup.title': '续写设置',
+  'continuation.setup.instruction': '续写指令（可选）',
+  'continuation.setup.instructionPlaceholder': '描述你想要的情节走向，或留空让 AI 自由续写',
+  'continuation.setup.length': '续写长度',
+  'continuation.setup.advancedSettings': '高级设置',
+  'continuation.setup.contextChapters': '上下文章节数',
+  'continuation.setup.numVersions': '生成版本数',
+  'continuation.setup.temperature': '创意温度',
+  'continuation.setup.generate': '生成续写',
+
+  // -- Continuation Results Stage --
+  'continuation.results.loading': '正在加载续写结果...',
+  'continuation.results.retry': '重试',
+  'continuation.results.back': '返回',
+  'continuation.results.noResults': '未找到续写结果，请从工作区重新生成。',
+  'continuation.results.returnToWorkspace': '返回工作区',
+  'continuation.results.quotaExhausted': '生成额度已用完',
+  'continuation.results.serviceBusy': '当前使用人数较多，请稍后再试',
+  'continuation.results.requestFailed': ({ status }: UiMessageParams) => `请求失败（HTTP ${String(status ?? '')})`,
+  'continuation.results.quotaFeedback': '提交使用反馈即可获得额外生成额度，立即继续创作。',
+  'continuation.results.submitFeedbackUnlock': '提交反馈，解锁额度',
+  'continuation.results.feedbackAlreadyClaimed': '反馈额度已领取。你可以在设置中配置自己的 API Key 继续使用。',
+  'continuation.results.goToSettings': '前往设置',
+  'continuation.results.badge': '续写结果',
+  'continuation.results.continuationOf': ({ chapter }: UiMessageParams) => `${String(chapter ?? '')}续写`,
+  'continuation.results.generating': '生成中',
+  'continuation.results.adopt': '采纳此版本',
+  'continuation.results.regenerate': '重新生成',
+  'continuation.results.exportAll': '导出全部',
+  'continuation.results.version': ({ n }: UiMessageParams) => `版本 ${String(n ?? '')}`,
+  'continuation.results.injectionSummary': ({ entities, relationships, systems }: UiMessageParams) =>
+    `注入摘要(${String(entities ?? 0)} 个实体,${String(relationships ?? 0)} 个关系,${String(systems ?? 0)} 个系统)`,
+  'continuation.results.emptyContent': '暂无内容',
+  'continuation.results.exportVersionHeader': ({ n }: UiMessageParams) => `========== 版本 ${String(n ?? '')} ==========`,
+
+  // -- Chapter Editor --
+  'editor.undo': '撤销',
+  'editor.redo': '重做',
+  'editor.driftWarning': '漂移警告',
+  'editor.charCount': ({ count }: UiMessageParams) => `${String(count ?? 0)} 字`,
+  'editor.cursorPosition': ({ para, col }: UiMessageParams) => `第 ${String(para ?? 0)} 段 · 第 ${String(col ?? 0)} 列`,
+  'editor.autoSaved': '已自动保存',
+  'editor.unsaved': '未保存更改',
+  'editor.save': '保存',
+
+  // -- Drift Warning Popover --
+  'drift.unknownTerm': '未知名词',
+  'drift.unknownNaming': '未知称谓',
+  'drift.unknownDefault': '未知词汇',
+  'drift.dismiss': '忽略',
+
+  // -- Prose Warnings Panel --
+  'prose.repeatedNgram': '重复短语',
+  'prose.longParagraph': '段落过长',
+  'prose.abnormalSentenceLength': '句子过长',
+  'prose.summaryTone': '总结式语气',
+  'prose.checkTitle': ({ count }: UiMessageParams) => `文本质量检查（${String(count ?? 0)} 项提示）`,
+  'prose.itemCount': ({ count }: UiMessageParams) => `${String(count ?? 0)} 项`,
+  'prose.candidate': ({ n }: UiMessageParams) => `候选 ${String(n ?? '')}`,
+
+  // -- Studio Page (continuation-path strings) --
+  'studio.chapter.deleteConfirm': ({ chapter }: UiMessageParams) => `确定要删除${String(chapter ?? '')}吗？此操作无法撤销。`,
+  'studio.chapter.editing': '编辑中',
+  'studio.chapter.reading': '阅读中',
+  'studio.chapter.titlePlaceholder': '输入章节标题',
+  'studio.chapter.titleEditHint': '双击编辑标题',
+  'studio.chapter.titleAddHint': '双击添加标题',
+  'studio.header.workspace': '章节工作台',
+  'studio.header.selectChapter': '选择章节',
+  'studio.actions.moreActions': '更多操作',
+  'studio.actions.exportAllChapters': '导出全部章节',
+  'studio.loading': '加载中...',
+  'studio.novelNotFound': '作品不存在',
+  'studio.chapter.charCount': ({ count }: UiMessageParams) => `${String(count ?? 0)} 字`,
+  'studio.chapter.updated': ({ time }: UiMessageParams) => `${String(time ?? '')}更新`,
+  'studio.chapter.edit': '编辑',
+  'studio.chapter.delete': '删除章节',
+} as const satisfies Record<string, UiMessageValue>
+
 const legalZhMessages = {
   'legal.lastUpdatedNote': ({ date }) => `最后更新 ${String(date ?? '')}`,
   'legal.contactLabel': '联系方式：',
@@ -399,6 +484,7 @@ const zhMessages = {
   ...llmZhMessages,
   ...feedbackZhMessages,
   ...worldModelZhMessages,
+  ...continuationZhMessages,
   ...legalZhMessages,
 } as const satisfies Record<string, UiMessageValue>
 
@@ -770,6 +856,89 @@ const enMessages: Partial<Record<UiMessageKey, UiMessageValue>> = {
   'copyright.counter.body2': 'During review, we may temporarily hide, delete, or limit access to or use of the related content depending on the circumstances.',
   'copyright.contact.title': '5. Contact',
   'copyright.contact.missing': 'No public contact email is configured yet. Before a public launch, set `VITE_LEGAL_CONTACT_EMAIL` in the environment.',
+
+  // -- Continuation Setup --
+  'continuation.setup.basedOn': ({ chapter }) => `Continue from ${String(chapter ?? '')}`,
+  'continuation.setup.charCount': ({ count }) => `${String(count ?? 0)} chars`,
+  'continuation.setup.loadingChapter': 'Loading chapter content...',
+  'continuation.setup.emptyChapter': 'No chapter content yet',
+  'continuation.setup.title': 'Continuation settings',
+  'continuation.setup.instruction': 'Continuation instruction (optional)',
+  'continuation.setup.instructionPlaceholder': 'Describe the plot direction you want, or leave blank for free continuation',
+  'continuation.setup.length': 'Continuation length',
+  'continuation.setup.advancedSettings': 'Advanced settings',
+  'continuation.setup.contextChapters': 'Context chapters',
+  'continuation.setup.numVersions': 'Versions to generate',
+  'continuation.setup.temperature': 'Temperature',
+  'continuation.setup.generate': 'Generate continuation',
+
+  // -- Continuation Results --
+  'continuation.results.loading': 'Loading continuation results...',
+  'continuation.results.retry': 'Retry',
+  'continuation.results.back': 'Back',
+  'continuation.results.noResults': 'No continuation results found. Please regenerate from the workspace.',
+  'continuation.results.returnToWorkspace': 'Return to workspace',
+  'continuation.results.quotaExhausted': 'Generation quota exhausted',
+  'continuation.results.serviceBusy': 'The service is busy right now. Please try again later.',
+  'continuation.results.requestFailed': ({ status }) => `Request failed (HTTP ${String(status ?? '')})`,
+  'continuation.results.quotaFeedback': 'Submit feedback to earn extra generation quota and keep writing.',
+  'continuation.results.submitFeedbackUnlock': 'Submit feedback, unlock quota',
+  'continuation.results.feedbackAlreadyClaimed': 'Feedback quota already claimed. You can configure your own API Key in Settings to continue.',
+  'continuation.results.goToSettings': 'Go to Settings',
+  'continuation.results.badge': 'Continuation results',
+  'continuation.results.continuationOf': ({ chapter }) => `continuation of ${String(chapter ?? '')}`,
+  'continuation.results.generating': 'Generating',
+  'continuation.results.adopt': 'Adopt this version',
+  'continuation.results.regenerate': 'Regenerate',
+  'continuation.results.exportAll': 'Export all',
+  'continuation.results.version': ({ n }) => `Version ${String(n ?? '')}`,
+  'continuation.results.injectionSummary': ({ entities, relationships, systems }) =>
+    `Injection summary (${String(entities ?? 0)} entities, ${String(relationships ?? 0)} relationships, ${String(systems ?? 0)} systems)`,
+  'continuation.results.emptyContent': 'No content yet',
+  'continuation.results.exportVersionHeader': ({ n }) => `========== Version ${String(n ?? '')} ==========`,
+
+  // -- Chapter Editor --
+  'editor.undo': 'Undo',
+  'editor.redo': 'Redo',
+  'editor.driftWarning': 'Drift warnings',
+  'editor.charCount': ({ count }) => `${String(count ?? 0)} chars`,
+  'editor.cursorPosition': ({ para, col }) => `Para ${String(para ?? 0)} · Col ${String(col ?? 0)}`,
+  'editor.autoSaved': 'Auto-saved',
+  'editor.unsaved': 'Unsaved changes',
+  'editor.save': 'Save',
+
+  // -- Drift Warning Popover --
+  'drift.unknownTerm': 'Unknown term',
+  'drift.unknownNaming': 'Unknown naming',
+  'drift.unknownDefault': 'Unknown term',
+  'drift.dismiss': 'Dismiss',
+
+  // -- Prose Warnings Panel --
+  'prose.repeatedNgram': 'Repeated phrase',
+  'prose.longParagraph': 'Long paragraph',
+  'prose.abnormalSentenceLength': 'Long sentence',
+  'prose.summaryTone': 'Summary tone',
+  'prose.checkTitle': ({ count }) => `Prose quality check (${String(count ?? 0)} ${Number(count) === 1 ? 'issue' : 'issues'})`,
+  'prose.itemCount': ({ count }) => `${String(count ?? 0)} ${Number(count) === 1 ? 'item' : 'items'}`,
+  'prose.candidate': ({ n }) => `Candidate ${String(n ?? '')}`,
+
+  // -- Studio Page --
+  'studio.chapter.deleteConfirm': ({ chapter }) => `Delete ${String(chapter ?? '')}? This cannot be undone.`,
+  'studio.chapter.editing': 'Editing',
+  'studio.chapter.reading': 'Reading',
+  'studio.chapter.titlePlaceholder': 'Enter chapter title',
+  'studio.chapter.titleEditHint': 'Double-click to edit title',
+  'studio.chapter.titleAddHint': 'Double-click to add title',
+  'studio.header.workspace': 'Chapter workspace',
+  'studio.header.selectChapter': 'Select chapter',
+  'studio.actions.moreActions': 'More actions',
+  'studio.actions.exportAllChapters': 'Export all chapters',
+  'studio.loading': 'Loading...',
+  'studio.novelNotFound': 'Novel not found',
+  'studio.chapter.charCount': ({ count }) => `${String(count ?? 0)} chars`,
+  'studio.chapter.updated': ({ time }) => `updated ${String(time ?? '')}`,
+  'studio.chapter.edit': 'Edit',
+  'studio.chapter.delete': 'Delete chapter',
 }
 
 export const uiMessages: Record<UiLocale, Partial<Record<UiMessageKey, UiMessageValue>>> = {

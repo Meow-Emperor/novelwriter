@@ -9,6 +9,7 @@ import { NwButton } from '@/components/ui/nw-button'
 import { Textarea } from '@/components/ui/textarea'
 import { PlainTextContent } from '@/components/ui/plain-text-content'
 import { cn } from '@/lib/utils'
+import { useUiLocale } from '@/contexts/UiLocaleContext'
 import { novelKeys } from '@/hooks/novel/keys'
 import { api } from '@/services/api'
 import { LENGTH_OPTIONS } from '@/hooks/novel/useContinuationSetupState'
@@ -55,6 +56,7 @@ export function ContinuationSetupStage({
   onTemperatureChange: (next: string) => void
   onGenerate: () => void
 }) {
+  const { t } = useUiLocale()
   const { data: chapter, isLoading: chapterLoading } = useQuery({
     queryKey: novelKeys.chapter(novelId, chapterNum),
     queryFn: () => api.getChapter(novelId, chapterNum),
@@ -69,11 +71,11 @@ export function ContinuationSetupStage({
         <div className="flex items-center justify-between shrink-0">
           <GlassCard variant="control" className="rounded-xl px-4 py-2">
             <span className="text-sm font-medium text-foreground">
-              基于{chapterReference ?? `第 ${chapterNum} 章`}继续
+              {t('continuation.setup.basedOn', { chapter: chapterReference ?? `Ch. ${chapterNum}` })}
             </span>
           </GlassCard>
           <span className="text-sm text-muted-foreground">
-            {wordCount} 字
+            {t('continuation.setup.charCount', { count: wordCount })}
           </span>
         </div>
 
@@ -81,8 +83,8 @@ export function ContinuationSetupStage({
           <PlainTextContent
             isLoading={chapterLoading}
             content={chapter?.content}
-            loadingLabel="加载章节内容..."
-            emptyLabel="章节暂无内容"
+            loadingLabel={t('continuation.setup.loadingChapter')}
+            emptyLabel={t('continuation.setup.emptyChapter')}
           />
         </GlassCard>
       </div>
@@ -90,18 +92,18 @@ export function ContinuationSetupStage({
       {/* Parameter Panel */}
       <aside className="w-[420px] shrink-0 border-l border-[var(--nw-glass-border)] bg-[var(--nw-glass-bg)] backdrop-blur-2xl p-6 flex flex-col gap-6 overflow-auto nw-scrollbar-thin">
         <h2 className="font-mono text-base font-semibold text-foreground">
-          续写设置
+          {t('continuation.setup.title')}
         </h2>
 
         {/* Instruction */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-foreground">
-            续写指令（可选）
+            {t('continuation.setup.instruction')}
           </label>
           <Textarea
             value={instruction}
             onChange={e => onInstructionChange(e.target.value)}
-            placeholder="描述你想要的情节走向，或留空让 AI 自由续写"
+            placeholder={t('continuation.setup.instructionPlaceholder')}
             className="min-h-[80px] resize-none text-[13px] leading-relaxed bg-[var(--nw-glass-bg)] border-[var(--nw-glass-border)] text-foreground placeholder:text-muted-foreground/70 focus-visible:ring-accent focus-visible:ring-offset-0"
           />
         </div>
@@ -109,7 +111,7 @@ export function ContinuationSetupStage({
         {/* Length */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-foreground">
-            续写长度
+            {t('continuation.setup.length')}
           </label>
           <div className="flex gap-2">
             {LENGTH_OPTIONS.map(opt => {
@@ -143,7 +145,7 @@ export function ContinuationSetupStage({
           onClick={() => onAdvancedOpenChange(!advancedOpen)}
           className="w-full flex items-center justify-between py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
-          <span>高级设置</span>
+          <span>{t('continuation.setup.advancedSettings')}</span>
           {advancedOpen ? (
             <ChevronUp size={14} className="text-muted-foreground" />
           ) : (
@@ -160,9 +162,9 @@ export function ContinuationSetupStage({
         >
           <div className="overflow-hidden">
             <GlassCard className="rounded-xl p-4 flex flex-col gap-4">
-              <AdvancedRow label="上下文章节数" desc="1–5" value={contextChapters} onChange={onContextChaptersChange} type="number" min={1} max={5} step={1} />
-              <AdvancedRow label="生成版本数" desc="1–2" value={numVersions} onChange={onNumVersionsChange} type="number" min={1} max={2} step={1} />
-              <AdvancedRow label="创意温度" desc="0.0–2.0" value={temperature} onChange={onTemperatureChange} type="number" min={0} max={2} step={0.1} />
+              <AdvancedRow label={t('continuation.setup.contextChapters')} desc="1–5" value={contextChapters} onChange={onContextChaptersChange} type="number" min={1} max={5} step={1} />
+              <AdvancedRow label={t('continuation.setup.numVersions')} desc="1–2" value={numVersions} onChange={onNumVersionsChange} type="number" min={1} max={2} step={1} />
+              <AdvancedRow label={t('continuation.setup.temperature')} desc="0.0–2.0" value={temperature} onChange={onTemperatureChange} type="number" min={0} max={2} step={0.1} />
             </GlassCard>
           </div>
         </div>
@@ -178,7 +180,7 @@ export function ContinuationSetupStage({
           className="w-full h-12 rounded-xl shadow-[0_4px_24px_hsl(var(--accent)/0.25)] text-[15px] font-semibold disabled:cursor-default"
         >
           <Sparkles size={18} />
-          生成续写
+          {t('continuation.setup.generate')}
         </NwButton>
       </aside>
     </div>
