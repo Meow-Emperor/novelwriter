@@ -10,15 +10,47 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
-from app.core.copilot.i18n import choose_locale_text
 from sqlalchemy.orm import Session
 
+from app.core.copilot.messages import CopilotTextKey, get_copilot_text
 from app.core.copilot.scope import EvidenceItem, ScopeSnapshot
 from app.models import CopilotRun, WorldEntity
 
 logger = logging.getLogger(__name__)
 
 MAX_COMPILED_SUGGESTIONS = 20
+
+_RESOURCE_TEXT_KEYS: dict[str, CopilotTextKey] = {
+    "entity": CopilotTextKey.TEXT_RESOURCE_ENTITY,
+    "relationship": CopilotTextKey.TEXT_RESOURCE_RELATIONSHIP,
+    "system": CopilotTextKey.TEXT_RESOURCE_SYSTEM,
+}
+
+_FIELD_TEXT_KEYS: dict[str, CopilotTextKey] = {
+    "name": CopilotTextKey.TEXT_FIELD_NAME,
+    "entity_type": CopilotTextKey.TEXT_FIELD_ENTITY_TYPE,
+    "description": CopilotTextKey.TEXT_FIELD_DESCRIPTION,
+    "aliases": CopilotTextKey.TEXT_FIELD_ALIASES,
+    "label": CopilotTextKey.TEXT_FIELD_RELATIONSHIP_LABEL,
+    "visibility": CopilotTextKey.TEXT_FIELD_VISIBILITY,
+    "constraints": CopilotTextKey.TEXT_FIELD_CONSTRAINTS,
+    "display_type": CopilotTextKey.TEXT_FIELD_DISPLAY_TYPE,
+}
+
+
+def _suggestion_text(
+    interaction_locale: str,
+    text_key: CopilotTextKey,
+    **params: object,
+) -> str:
+    return get_copilot_text(text_key, locale=interaction_locale, **params)
+
+
+def _resource_label(resource: str, interaction_locale: str) -> str:
+    key = _RESOURCE_TEXT_KEYS.get(resource)
+    if key is None:
+        return resource
+    return _suggestion_text(interaction_locale, key)
 
 
 @dataclass
@@ -116,15 +148,15 @@ def _expand_relationship_entity_dependencies(
                 endpoint_type = str(delta.get(f"{endpoint}_entity_type") or "Other").strip() or "Other"
                 expanded.append({
                     "kind": "create_entity",
-                    "title": choose_locale_text(
+                    "title": _suggestion_text(
                         interaction_locale,
-                        f"补入关联实体「{endpoint_name}」",
-                        f'Add related entity "{endpoint_name}"',
+                        CopilotTextKey.SUGGESTION_SYNTH_ENTITY_TITLE,
+                        entity_name=endpoint_name,
                     ),
-                    "summary": choose_locale_text(
+                    "summary": _suggestion_text(
                         interaction_locale,
-                        f"为关系建议补入缺失实体「{endpoint_name}」。",
-                        f'Add the missing entity "{endpoint_name}" so the relationship suggestion can be applied.',
+                        CopilotTextKey.SUGGESTION_SYNTH_ENTITY_SUMMARY,
+                        entity_name=endpoint_name,
                     ),
                     "target_resource": "entity",
                     "target_id": None,
@@ -193,7 +225,11 @@ def _compile_one(
     kind = raw.get("kind", "")
     title = raw.get(
         "title",
-        choose_locale_text(interaction_locale, f"建议 {index + 1}", f"Suggestion {index + 1}"),
+        _suggestion_text(
+            interaction_locale,
+            CopilotTextKey.SUGGESTION_FALLBACK_TITLE,
+            index=index + 1,
+        ),
     )
     summary = raw.get("summary", "")
     target_resource = raw.get("target_resource", "entity")
@@ -224,38 +260,31 @@ def _compile_one(
         if resolved is None:
             actionable = False
             target_label = str(target_id or "?")
-            non_actionable_reason = choose_locale_text(
-                interaction_locale,
-                "这条建议对应的内容刚刚发生了变化，请刷新后再试一次。",
-                "This suggestion is stale because the underlying content just changed. Refresh and try again.",
-            )
+            non_actionable_reason = _suggestion_text(interaction_locale, CopilotTextKey.SUGGESTION_REASON_STALE)
         else:
             target_id = resolved["id"]
             target_label = resolved["label"]
             if is_draft_governance and not resolved.get("is_draft", False):
                 actionable = False
-                non_actionable_reason = choose_locale_text(
+                non_actionable_reason = _suggestion_text(
                     interaction_locale,
-                    "这一步只能直接整理待确认内容，已确认内容请到对应页面编辑。",
-                    "This step can only tidy draft content directly. Edit confirmed content from its main page instead.",
+                    CopilotTextKey.SUGGESTION_REASON_DRAFT_ONLY,
                 )
             else:
                 apply_action = _build_update_action(kind, delta, target_resource, target_id, snapshot, mode)
                 if apply_action is None:
                     actionable = False
-                    non_actionable_reason = choose_locale_text(
+                    non_actionable_reason = _suggestion_text(
                         interaction_locale,
-                        "这条建议暂时还不能直接采纳，请换一种方式继续整理。",
-                        "This suggestion cannot be applied directly yet. Please continue with a different edit.",
+                        CopilotTextKey.SUGGESTION_REASON_CANNOT_APPLY_DIRECT,
                     )
 
     elif kind.startswith("create_"):
         if is_draft_governance:
             actionable = False
-            non_actionable_reason = choose_locale_text(
+            non_actionable_reason = _suggestion_text(
                 interaction_locale,
-                "这里更适合整理现有待确认内容；新建内容请先回到正常编辑流程。",
-                "This workspace is for cleaning up existing draft content. Please return to the normal editing flow to create new items.",
+                CopilotTextKey.SUGGESTION_REASON_DRAFT_CREATE_DISALLOWED,
             )
         else:
             target_id = None
@@ -278,10 +307,9 @@ def _compile_one(
     else:
         actionable = False
         target_label = str(target_id or "?")
-        non_actionable_reason = choose_locale_text(
+        non_actionable_reason = _suggestion_text(
             interaction_locale,
-            "这条建议目前还不能直接采纳。",
-            "This suggestion cannot be applied directly right now.",
+            CopilotTextKey.SUGGESTION_REASON_NOT_DIRECTLY_APPLICABLE,
         )
 
     field_deltas = _build_field_deltas(
@@ -351,15 +379,10 @@ def _resource_to_tab(resource: str, profile: str) -> str:
 
 
 def _build_new_resource_label(resource: str, interaction_locale: str) -> str:
-    resource_label = choose_locale_text(
+    return _suggestion_text(
         interaction_locale,
-        {"entity": "实体", "relationship": "关系", "system": "体系"}.get(resource, resource),
-        {"entity": "entity", "relationship": "relationship", "system": "system"}.get(resource, resource),
-    )
-    return choose_locale_text(
-        interaction_locale,
-        f"新{resource_label}",
-        f"New {resource_label}",
+        CopilotTextKey.TEXT_NEW_RESOURCE,
+        resource_label=_resource_label(resource, interaction_locale),
     )
 
 
@@ -583,15 +606,13 @@ def _build_non_actionable_create_reason(
 ) -> str:
     if target_resource == "entity":
         if not delta.get("name"):
-            return choose_locale_text(
+            return _suggestion_text(
                 interaction_locale,
-                "这条实体建议还不完整，暂时不能直接采纳。",
-                "This entity suggestion is incomplete and cannot be applied yet.",
+                CopilotTextKey.SUGGESTION_CREATE_REASON_ENTITY_INCOMPLETE,
             )
-        return choose_locale_text(
+        return _suggestion_text(
             interaction_locale,
-            "这个名字和现有内容太接近了，请先调整后再确认。",
-            "This name is too close to existing content. Adjust it before applying.",
+            CopilotTextKey.SUGGESTION_CREATE_REASON_ENTITY_NAME_COLLISION,
         )
 
     if target_resource == "relationship":
@@ -601,16 +622,14 @@ def _build_non_actionable_create_reason(
         target_name = str(delta.get("target_name") or "").strip()
         label = delta.get("label")
         if not label:
-            return choose_locale_text(
+            return _suggestion_text(
                 interaction_locale,
-                "这条关系信息还不完整，暂时不能直接采纳。",
-                "This relationship suggestion is incomplete and cannot be applied yet.",
+                CopilotTextKey.SUGGESTION_CREATE_REASON_RELATIONSHIP_INCOMPLETE,
             )
         if not any([isinstance(source_id, int), source_name]) or not any([isinstance(target_id, int), target_name]):
-            return choose_locale_text(
+            return _suggestion_text(
                 interaction_locale,
-                "这条关系信息还不完整，暂时不能直接采纳。",
-                "This relationship suggestion is incomplete and cannot be applied yet.",
+                CopilotTextKey.SUGGESTION_CREATE_REASON_RELATIONSHIP_INCOMPLETE,
             )
 
         source_ref = _resolve_relationship_endpoint_reference(
@@ -626,57 +645,30 @@ def _build_non_actionable_create_reason(
             entity_candidates=entity_candidates,
         )
         if source_ref is None or target_ref is None:
-            return choose_locale_text(
+            return _suggestion_text(
                 interaction_locale,
-                "这条关系还依赖未确认的实体或设定。请先确认相关实体，再来确认这条关系。",
-                "This relationship still depends on unconfirmed entities or world details. Confirm those first, then apply the relationship.",
+                CopilotTextKey.SUGGESTION_CREATE_REASON_RELATIONSHIP_DEPENDENCY,
             )
-        return choose_locale_text(
+        return _suggestion_text(
             interaction_locale,
-            "这条关系和现有内容重复或冲突了，暂时不能直接采纳。",
-            "This relationship duplicates or conflicts with existing content, so it cannot be applied yet.",
+            CopilotTextKey.SUGGESTION_CREATE_REASON_RELATIONSHIP_CONFLICT,
         )
 
     if target_resource == "system":
         if not delta.get("name"):
-            return choose_locale_text(
+            return _suggestion_text(
                 interaction_locale,
-                "这条体系建议还不完整，暂时不能直接采纳。",
-                "This system suggestion is incomplete and cannot be applied yet.",
+                CopilotTextKey.SUGGESTION_CREATE_REASON_SYSTEM_INCOMPLETE,
             )
-        return choose_locale_text(
+        return _suggestion_text(
             interaction_locale,
-            "这个体系名称和现有内容太接近了，请先调整后再确认。",
-            "This system name is too close to existing content. Adjust it before applying.",
+            CopilotTextKey.SUGGESTION_CREATE_REASON_SYSTEM_NAME_COLLISION,
         )
 
-    return choose_locale_text(
+    return _suggestion_text(
         interaction_locale,
-        "这条建议暂时还不能直接采纳。",
-        "This suggestion cannot be applied directly yet.",
+        CopilotTextKey.SUGGESTION_REASON_CANNOT_APPLY_DIRECT,
     )
-
-
-_FIELD_LABELS_ZH: dict[str, str] = {
-    "name": "名称",
-    "entity_type": "类型",
-    "description": "描述",
-    "aliases": "别名",
-    "label": "关系标签",
-    "visibility": "可见性",
-    "constraints": "约束",
-    "display_type": "展示类型",
-}
-_FIELD_LABELS_EN: dict[str, str] = {
-    "name": "Name",
-    "entity_type": "Type",
-    "description": "Description",
-    "aliases": "Aliases",
-    "label": "Relationship label",
-    "visibility": "Visibility",
-    "constraints": "Constraints",
-    "display_type": "Display type",
-}
 
 _RELATIONSHIP_METADATA_FIELDS = {
     "source_id",
@@ -730,10 +722,11 @@ def _build_field_deltas(
     for field_key, value in delta.items():
         if value is None or field_key in _RELATIONSHIP_METADATA_FIELDS:
             continue
-        label = choose_locale_text(
-            interaction_locale,
-            _FIELD_LABELS_ZH.get(field_key, field_key),
-            _FIELD_LABELS_EN.get(field_key, field_key),
+        field_text_key = _FIELD_TEXT_KEYS.get(field_key)
+        label = (
+            _suggestion_text(interaction_locale, field_text_key)
+            if field_text_key is not None
+            else field_key
         )
         before = current.get(field_key)
         after = ", ".join(value) if isinstance(value, list) else str(value) if value else ""
@@ -754,10 +747,10 @@ def _build_field_deltas(
             existing = next((item for item in existing_attrs if item.key == key), None)
             deltas.append({
                 "field": f"attribute:{key}",
-                "label": choose_locale_text(
+                "label": _suggestion_text(
                     interaction_locale,
-                    f"属性 · {key}",
-                    f"Attribute · {key}",
+                    CopilotTextKey.TEXT_ATTRIBUTE_FIELD_LABEL,
+                    key=key,
                 ),
                 "before": existing.surface if existing else None,
                 "after": surface,

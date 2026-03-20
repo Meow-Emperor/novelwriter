@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { UiLocaleProvider } from '@/contexts/UiLocaleContext'
@@ -14,6 +14,12 @@ function renderPanel(warnings: ProseWarning[]) {
 }
 
 describe('ProseWarningsPanel', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    document.documentElement.lang = 'zh-CN'
+    delete document.documentElement.dataset.uiLocale
+  })
+
   it('stays hidden when there are no warnings', () => {
     const { container } = renderPanel([])
     expect(container).toBeEmptyDOMElement()
@@ -63,4 +69,30 @@ describe('ProseWarningsPanel', () => {
     expect(screen.getAllByText('候选 2')).toHaveLength(2)
     expect(screen.getByText('雾气翻涌，雾气翻涌，雾气翻涌。')).toBeInTheDocument()
   })
+
+  it('renders descriptor-first warning copy in English when the UI locale is en', async () => {
+    const user = userEvent.setup()
+    localStorage.setItem('novwr_ui_locale', 'en')
+    document.documentElement.lang = 'en'
+
+    const warnings: ProseWarning[] = [
+      {
+        code: 'repeated_ngram',
+        message: 'fallback repeated',
+        message_key: 'continuation.prosecheck.warning.repeated_ngram',
+        message_params: { phrase: 'silver rain', count: 2 },
+        version: 1,
+        evidence: 'silver rain, silver rain',
+      },
+    ]
+
+    renderPanel(warnings)
+
+    await user.click(screen.getByRole('button', { name: 'Prose quality check (1 issue)' }))
+
+    expect(screen.getByText('Repeated phrase')).toBeInTheDocument()
+    expect(screen.getByText('Repeated phrase "silver rain" detected (2 times)')).toBeInTheDocument()
+    expect(screen.getByText('Candidate 1')).toBeInTheDocument()
+  })
+
 })

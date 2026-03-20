@@ -1,106 +1,118 @@
+import '@/lib/uiMessagePacks/novel'
+import { resolveCurrentUiLocale } from '@/lib/uiLocale'
+import { translateUiMessage, type UiLocale } from '@/lib/uiMessages'
+
+function currentLocale(): UiLocale {
+  return resolveCurrentUiLocale()
+}
+
+function worldLabel(key: Parameters<typeof translateUiMessage>[1], params?: Parameters<typeof translateUiMessage>[2]) {
+  return translateUiMessage(currentLocale(), key, params)
+}
+
 export const LABELS = {
   // Tabs
-  TAB_SYSTEMS: '世界体系',
-  TAB_ENTITIES: '实体',
-  TAB_RELATIONSHIPS: '关系',
+  get TAB_SYSTEMS() { return worldLabel('worldModel.common.systems') },
+  get TAB_ENTITIES() { return worldLabel('worldModel.common.entities') },
+  get TAB_RELATIONSHIPS() { return worldLabel('worldModel.common.relationships') },
 
   // Entity
-  ENTITY_NEW: '+ 新实体',
-  ENTITY_SEARCH_PLACEHOLDER: '搜索实体...',
-  ENTITY_EMPTY: '选择一个实体查看详情',
-  ENTITY_DELETE: '删除实体',
-  ENTITY_DELETE_CONFIRM: '确定要删除这个实体吗？删除后无法恢复。',
-  ENTITY_TYPE_ALL: '全部',
-  ENTITY_ATTRIBUTES: '属性',
-  ENTITY_ADD_ATTRIBUTE: '+ 添加属性',
-  ENTITY_DRAFT_BANNER: (n: number) => `${n} 个待确认`,
-  STATUS_DRAFT: '草稿',
+  get ENTITY_NEW() { return worldLabel('worldModel.entity.new') },
+  get ENTITY_SEARCH_PLACEHOLDER() { return worldLabel('worldModel.common.searchEntities') },
+  get ENTITY_EMPTY() { return worldLabel('worldModel.entity.empty') },
+  get ENTITY_DELETE() { return worldLabel('worldModel.entity.delete') },
+  get ENTITY_DELETE_CONFIRM() { return worldLabel('worldModel.entity.deleteConfirm') },
+  get ENTITY_TYPE_ALL() { return worldLabel('worldModel.common.all') },
+  get ENTITY_ATTRIBUTES() { return worldLabel('worldModel.entity.attributes') },
+  get ENTITY_ADD_ATTRIBUTE() { return worldLabel('worldModel.entity.addAttribute') },
+  ENTITY_DRAFT_BANNER: (count: number) => `${count} ${worldLabel('worldModel.common.statusDraft')}`,
+  get STATUS_DRAFT() { return worldLabel('worldModel.common.statusDraft') },
 
   // Visibility
-  VIS_ACTIVE: '活跃',
-  VIS_REFERENCE: '参考',
-  VIS_HIDDEN: '隐藏',
+  get VIS_ACTIVE() { return worldLabel('worldModel.common.visibilityActive') },
+  get VIS_REFERENCE() { return worldLabel('worldModel.common.visibilityReference') },
+  get VIS_HIDDEN() { return worldLabel('worldModel.common.visibilityHidden') },
 
   // System
-  SYSTEM_NEW: '+ 新体系',
-  SYSTEM_SEARCH_PLACEHOLDER: '搜索体系...',
-  SYSTEM_BACK: '‹ 世界体系',
-  SYSTEM_CONSTRAINTS: '规则约束',
-  SYSTEM_ADD_CONSTRAINT: '+ 添加约束',
-  SYSTEM_ADD_ROOT: '+ 添加根节点',
-  SYSTEM_ADD_EVENT: '+ 添加事件',
-  SYSTEM_ADD_ITEM: '+ 添加规则',
-  SYSTEM_INSERT: '+ 插入',
-  SYSTEM_TYPE_HIERARCHY: '层级结构',
-  SYSTEM_TYPE_TIMELINE: '时间线',
-  SYSTEM_TYPE_LIST: '列表',
-  SYSTEM_TYPE_GRAPH_LEGACY: '关系图（只读）',
-  SYSTEM_DELETE: '删除体系',
-  SYSTEM_DELETE_CONFIRM: '确认删除？',
+  get SYSTEM_NEW() { return worldLabel('worldModel.system.new') },
+  get SYSTEM_SEARCH_PLACEHOLDER() { return worldLabel('worldModel.common.searchSystems') },
+  get SYSTEM_BACK() { return worldLabel('worldModel.system.back') },
+  get SYSTEM_CONSTRAINTS() { return worldLabel('worldModel.system.constraints') },
+  get SYSTEM_ADD_CONSTRAINT() { return worldLabel('worldModel.system.addConstraint') },
+  get SYSTEM_ADD_ROOT() { return worldLabel('worldModel.system.addRoot') },
+  get SYSTEM_ADD_EVENT() { return worldLabel('worldModel.system.addEvent') },
+  get SYSTEM_ADD_ITEM() { return worldLabel('worldModel.system.addItem') },
+  get SYSTEM_INSERT() { return worldLabel('worldModel.system.insert') },
+  get SYSTEM_TYPE_HIERARCHY() { return worldLabel('worldModel.system.display.hierarchy') },
+  get SYSTEM_TYPE_TIMELINE() { return worldLabel('worldModel.system.display.timeline') },
+  get SYSTEM_TYPE_LIST() { return worldLabel('worldModel.system.display.list') },
+  get SYSTEM_TYPE_GRAPH_LEGACY() { return worldLabel('worldModel.system.display.graph') },
+  get SYSTEM_DELETE() { return worldLabel('worldModel.system.delete') },
+  get SYSTEM_DELETE_CONFIRM() { return worldLabel('worldModel.system.deleteConfirm') },
 
   // Relationship
-  REL_EMPTY: '选择一个实体查看关系',
-  REL_NEW: '创建关系',
-  REL_DELETE: '删除关系',
-  REL_DELETE_CONFIRM: '确定要删除这个关系吗？',
-  REL_DESCRIPTION: '关系描述',
-  REL_LABEL_PLACEHOLDER: '（关系标签）',
-  REL_DESCRIPTION_PLACEHOLDER: '（添加关系描述，决定续写质量）',
-  REL_INSPECTOR_EMPTY: '点击一条关系查看描述',
-  REL_INSPECTOR_HINT: '选择一条关系后，这里会展示其描述（更影响续写质量）',
+  get REL_EMPTY() { return worldLabel('worldModel.relationship.empty') },
+  get REL_NEW() { return worldLabel('worldModel.relationship.new') },
+  get REL_DELETE() { return worldLabel('worldModel.relationship.delete') },
+  get REL_DELETE_CONFIRM() { return worldLabel('worldModel.relationship.deleteConfirm') },
+  get REL_DESCRIPTION() { return worldLabel('worldModel.relationship.description') },
+  get REL_LABEL_PLACEHOLDER() { return worldLabel('worldModel.relationship.labelPlaceholder') },
+  get REL_DESCRIPTION_PLACEHOLDER() { return worldLabel('worldModel.relationship.descriptionPlaceholder') },
+  get REL_INSPECTOR_EMPTY() { return worldLabel('worldModel.relationship.inspectorEmpty') },
+  get REL_INSPECTOR_HINT() { return worldLabel('worldModel.relationship.inspectorHint') },
 
   // Common
-  CONFIRM: '确认',
-  CANCEL: '取消',
-  DELETE: '删除',
-  SAVE: '保存',
-  BATCH_CONFIRM: '批量确认',
+  get CONFIRM() { return worldLabel('dialog.confirm') },
+  get CANCEL() { return worldLabel('dialog.cancel') },
+  get DELETE() { return worldLabel('worldModel.common.deleted') },
+  get SAVE() { return worldLabel('editor.save') },
+  get BATCH_CONFIRM() { return `${worldLabel('dialog.confirm')} ${worldLabel('worldModel.common.all')}` },
 
   // Placeholders
-  PH_KEY: '键名',
-  PH_VALUE: '值',
-  PH_NAME: '名称',
-  PH_DESCRIPTION: '描述',
-  PH_NODE_NAME: '节点名称',
-  PH_EVENT_NAME: '事件名称',
-  PH_TIME: '时间',
-  PH_CONSTRAINT: '约束规则',
-  PH_SYSTEM_NAME: '体系名称',
+  get PH_KEY() { return worldLabel('worldModel.placeholder.key') },
+  get PH_VALUE() { return worldLabel('worldModel.placeholder.value') },
+  get PH_NAME() { return worldLabel('worldModel.placeholder.name') },
+  get PH_DESCRIPTION() { return worldLabel('worldModel.placeholder.description') },
+  get PH_NODE_NAME() { return worldLabel('worldModel.placeholder.nodeName') },
+  get PH_EVENT_NAME() { return worldLabel('worldModel.placeholder.eventName') },
+  get PH_TIME() { return worldLabel('worldModel.placeholder.time') },
+  get PH_CONSTRAINT() { return worldLabel('worldModel.placeholder.constraint') },
+  get PH_SYSTEM_NAME() { return worldLabel('worldModel.placeholder.systemName') },
 
   // Bootstrap
-  BOOTSTRAP_INITIAL_EXTRACTION: '从章节提取',
-  BOOTSTRAP_REEXTRACT: '重新提取草稿',
-  BOOTSTRAP_SCANNING: '处理中...',
-  BOOTSTRAP_COMPLETED_INDEX_REFRESH: '全书检索已更新',
-  BOOTSTRAP_COMPLETED_EXTRACTION: (e: number, r: number) => `提取到 ${e} 个实体、${r} 条关系`,
-  BOOTSTRAP_FAILED: '执行失败',
-  BOOTSTRAP_REEXTRACT_CONFIRM_TITLE: '危险操作：重新提取章节草稿',
-  BOOTSTRAP_REEXTRACT_CONFIRM_DESC:
-    '替换当前从章节提取的草稿（保留已确认内容），然后重新提取实体和关系。\n确认继续吗？',
-  BOOTSTRAP_REEXTRACT_CONFIRM: '确认重新提取',
-  BOOTSTRAP_STEP_PENDING: '准备中',
-  BOOTSTRAP_STEP_TOKENIZING: '分词处理',
-  BOOTSTRAP_STEP_EXTRACTING: '提取候选词',
-  BOOTSTRAP_STEP_WINDOWING: '分析章节关联',
-  BOOTSTRAP_STEP_REFINING: 'AI 精炼提取',
-  BOOTSTRAP_NO_TEXT: '请先上传章节内容',
+  get BOOTSTRAP_INITIAL_EXTRACTION() { return worldLabel('worldModel.bootstrap.extractFromChapters') },
+  get BOOTSTRAP_REEXTRACT() { return worldLabel('worldModel.bootstrap.reextractDrafts') },
+  get BOOTSTRAP_SCANNING() { return worldLabel('worldModel.common.processing') },
+  get BOOTSTRAP_COMPLETED_INDEX_REFRESH() { return worldLabel('worldModel.bootstrap.completedIndexRefresh') },
+  BOOTSTRAP_COMPLETED_EXTRACTION: (entities: number, relationships: number) =>
+    worldLabel('worldModel.bootstrap.completedExtraction', { entities, relationships }),
+  get BOOTSTRAP_FAILED() { return worldLabel('worldModel.bootstrap.failed') },
+  get BOOTSTRAP_REEXTRACT_CONFIRM_TITLE() { return worldLabel('worldModel.bootstrap.confirmTitle') },
+  get BOOTSTRAP_REEXTRACT_CONFIRM_DESC() { return worldLabel('worldModel.bootstrap.confirmDescription') },
+  get BOOTSTRAP_REEXTRACT_CONFIRM() { return worldLabel('worldModel.bootstrap.confirmAction') },
+  get BOOTSTRAP_STEP_PENDING() { return worldLabel('worldModel.bootstrap.step.pending') },
+  get BOOTSTRAP_STEP_TOKENIZING() { return worldLabel('worldModel.bootstrap.step.tokenizing') },
+  get BOOTSTRAP_STEP_EXTRACTING() { return worldLabel('worldModel.bootstrap.step.extracting') },
+  get BOOTSTRAP_STEP_WINDOWING() { return worldLabel('worldModel.bootstrap.step.windowing') },
+  get BOOTSTRAP_STEP_REFINING() { return worldLabel('worldModel.bootstrap.step.refining') },
+  get BOOTSTRAP_NO_TEXT() { return worldLabel('worldModel.bootstrap.noText') },
 
   // Error toasts (World Model)
-  ERROR_DELETE_FAILED: '删除失败，请重试',
-  ERROR_SAVE_FAILED: '保存失败，请重试',
-  ERROR_CONFIRM_FAILED: '确认失败，请重试',
-  ERROR_REJECT_FAILED: '拒绝失败，请重试',
-  ERROR_BOOTSTRAP_TRIGGER_FAILED: '操作失败，请重试',
-  WORLDPACK_IMPORT_COMPLETED: '世界观导入完成',
-  WORLDPACK_IMPORT_FAILED: '世界观导入失败，请重试',
+  get ERROR_DELETE_FAILED() { return worldLabel('worldModel.error.deleteFailed') },
+  get ERROR_SAVE_FAILED() { return worldLabel('worldModel.error.saveFailed') },
+  get ERROR_CONFIRM_FAILED() { return worldLabel('worldModel.error.confirmFailed') },
+  get ERROR_REJECT_FAILED() { return worldLabel('worldModel.error.rejectFailed') },
+  get ERROR_BOOTSTRAP_TRIGGER_FAILED() { return worldLabel('worldModel.error.bootstrapTriggerFailed') },
+  get WORLDPACK_IMPORT_COMPLETED() { return worldLabel('worldModel.worldpack.completed') },
+  get WORLDPACK_IMPORT_FAILED() { return worldLabel('worldModel.worldpack.failed') },
 
   // Draft review
-  CONFIRM_ALL_ENTITIES: '全部确认',
-  CONFIRM_ALL_RELATIONSHIPS: '全部确认',
+  get CONFIRM_ALL_ENTITIES() { return `${worldLabel('dialog.confirm')} ${worldLabel('worldModel.common.all')}` },
+  get CONFIRM_ALL_RELATIONSHIPS() { return `${worldLabel('dialog.confirm')} ${worldLabel('worldModel.common.all')}` },
 
-  // Display helpers (centralized for future i18n)
-  ENTITY_TYPE_LABEL: (entityType: string, locale: 'zh' | 'en' = 'zh') => {
-    const table: Record<'zh' | 'en', Record<string, string>> = {
+  // Display helpers
+  ENTITY_TYPE_LABEL: (entityType: string, locale: UiLocale = currentLocale()) => {
+    const table: Record<UiLocale, Record<string, string>> = {
       zh: {
         Character: '角色',
         Location: '地点',

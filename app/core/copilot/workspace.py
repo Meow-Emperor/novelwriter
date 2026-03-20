@@ -8,9 +8,9 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 from typing import Any
-from app.core.copilot.i18n import choose_locale_text
 
 from app.core.ai_client import ToolCall
+from app.core.copilot.messages import CopilotTextKey, get_copilot_text
 from app.core.copilot.scope import EvidenceItem, MAX_EVIDENCE_ITEMS
 
 
@@ -56,6 +56,14 @@ def make_pack_id(prefix: str, *parts: Any) -> str:
     content = "|".join(str(part) for part in parts)
     digest = hashlib.sha256(content.encode()).hexdigest()[:8]
     return f"{prefix}_{digest}"
+
+
+def _workspace_text(
+    interaction_locale: str,
+    text_key: CopilotTextKey,
+    **params: object,
+) -> str:
+    return get_copilot_text(text_key, locale=interaction_locale, **params)
 
 
 @dataclass
@@ -182,13 +190,13 @@ def evidence_from_workspace(
             title=", ".join(pack.anchor_terms[:3]) or pack.pack_id,
             excerpt=pack.expanded_text or pack.preview_excerpt,
             why_relevant=(
-                choose_locale_text(
+                _workspace_text(
                     interaction_locale,
-                    f"已从 {pack.support_count} 处相关线索中整理",
-                    f"Compiled from {pack.support_count} related clues",
+                    CopilotTextKey.WORKSPACE_EVIDENCE_COMPILED_MULTIPLE,
+                    count=pack.support_count,
                 )
                 if pack.support_count and pack.support_count > 1
-                else choose_locale_text(interaction_locale, "已从相关线索中整理", "Compiled from related clues")
+                else _workspace_text(interaction_locale, CopilotTextKey.WORKSPACE_EVIDENCE_COMPILED)
             ),
             pack_id=pack.pack_id,
             source_refs=list(pack.source_refs),

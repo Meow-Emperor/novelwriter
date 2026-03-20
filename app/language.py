@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 DEFAULT_LANGUAGE = "zh"
+DEFAULT_COPILOT_INTERACTION_LOCALE = "zh"
+SUPPORTED_COPILOT_INTERACTION_LOCALES = ("zh", "en")
 
 
 def normalize_language_code(value: str | None, *, default: str | None = DEFAULT_LANGUAGE) -> str | None:
@@ -41,6 +43,41 @@ def get_language_fallback_chain(
         seen.add(candidate)
         deduped.append(candidate)
     return tuple(deduped)
+
+
+def resolve_supported_locale(
+    locale: str | None,
+    *,
+    supported: tuple[str, ...],
+    default: str,
+) -> str:
+    normalized_supported = tuple(
+        candidate
+        for candidate in (
+            normalize_language_code(item, default=None)
+            for item in supported
+        )
+        if candidate
+    )
+
+    for candidate in get_language_fallback_chain(locale, default=None):
+        if candidate in normalized_supported:
+            return candidate
+
+    normalized_default = normalize_language_code(default, default=None)
+    if normalized_default and normalized_default in normalized_supported:
+        return normalized_default
+    if normalized_supported:
+        return normalized_supported[0]
+    return normalize_language_code(default, default=DEFAULT_LANGUAGE) or DEFAULT_LANGUAGE
+
+
+def normalize_copilot_interaction_locale(locale: str | None) -> str:
+    return resolve_supported_locale(
+        locale,
+        supported=SUPPORTED_COPILOT_INTERACTION_LOCALES,
+        default=DEFAULT_COPILOT_INTERACTION_LOCALE,
+    )
 
 
 def resolve_prompt_locale(

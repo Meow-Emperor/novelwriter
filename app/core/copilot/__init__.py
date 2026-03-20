@@ -32,7 +32,8 @@ from sqlalchemy.orm import Session, object_session
 from app.core.ai_client import AIClient, ToolCallUnsupportedError
 from app.core.auth import settle_quota_reservation
 from app.core.copilot.apply import ApplyResult, apply_suggestions
-from app.core.copilot.i18n import choose_locale_text
+from app.core.copilot.messages import CopilotTextKey, get_copilot_text
+from app.language import normalize_copilot_interaction_locale
 from app.core.copilot.prompting import (
     apply_quick_action_prompt,
     build_auto_preload as _build_auto_preload,
@@ -123,9 +124,6 @@ __all__ = [
 
 MAX_ACTIVE_RUNS_PER_USER = 3
 MAX_EVIDENCE_PACKS = 12
-COPILOT_RUN_FAILED_MESSAGE = "Copilot 运行失败，请重试"
-COPILOT_RUN_INTERRUPTED_MESSAGE = "Copilot 运行在后台失去活动租约，请重试。"
-COPILOT_APPLY_FAILED_MESSAGE = "应用建议失败，请刷新后重试"
 ACTIVE_RUN_STATUSES = frozenset({"queued", "running"})
 # ---------------------------------------------------------------------------
 # Error type
@@ -149,30 +147,29 @@ def _resolve_run_interaction_locale(run: CopilotRun | None) -> str:
     if run is None:
         return "zh"
     session = getattr(run, "session", None)
-    return str(getattr(session, "interaction_locale", "zh") or "zh")
+    return normalize_copilot_interaction_locale(
+        str(getattr(session, "interaction_locale", "zh") or "zh"),
+    )
 
 
 def _copilot_run_failed_message(interaction_locale: str) -> str:
-    return choose_locale_text(
-        interaction_locale,
-        COPILOT_RUN_FAILED_MESSAGE,
-        "Copilot run failed. Please try again.",
+    return get_copilot_text(
+        CopilotTextKey.RUN_FAILED,
+        locale=interaction_locale,
     )
 
 
 def _copilot_run_interrupted_message(interaction_locale: str) -> str:
-    return choose_locale_text(
-        interaction_locale,
-        COPILOT_RUN_INTERRUPTED_MESSAGE,
-        "The copilot run lost its active background lease. Please try again.",
+    return get_copilot_text(
+        CopilotTextKey.RUN_INTERRUPTED,
+        locale=interaction_locale,
     )
 
 
 def _running_trace_summary(interaction_locale: str) -> str:
-    return choose_locale_text(
-        interaction_locale,
-        "正在研究，等待模型决定是否调用工具...",
-        "Research in progress. Waiting for the model to decide whether tools are needed...",
+    return get_copilot_text(
+        CopilotTextKey.RUN_RESEARCHING,
+        locale=interaction_locale,
     )
 
 
@@ -497,13 +494,14 @@ def build_session_signature(
 ) -> str:
     """Deterministic signature for session dedup."""
     normalized_context = normalize_session_identity_context(mode, scope, context)
+    normalized_interaction_locale = normalize_copilot_interaction_locale(interaction_locale)
     payload = json.dumps(
         {
             "mode": mode,
             "scope": scope,
             "entity_id": (normalized_context or {}).get("entity_id"),
             "tab": (normalized_context or {}).get("tab"),
-            "locale": interaction_locale,
+            "locale": normalized_interaction_locale,
         },
         sort_keys=True,
     )
@@ -522,7 +520,8 @@ def open_or_reuse_session(
 ) -> tuple[CopilotSession, bool]:
     """Return (session, created).  Reuses existing unexpired session if signature matches."""
     context = canonicalize_session_context(context)
-    sig = build_session_signature(mode, scope, context, interaction_locale)
+    normalized_interaction_locale = normalize_copilot_interaction_locale(interaction_locale)
+    sig = build_session_signature(mode, scope, context, normalized_interaction_locale)
 
     existing = _load_session_by_signature(
         db,
@@ -534,6 +533,7 @@ def open_or_reuse_session(
     if existing is not None:
         existing.last_active_at = func.now()
         existing.context_json = context
+        existing.interaction_locale = normalized_interaction_locale
         if display_title:
             existing.display_title = display_title
         db.commit()
@@ -547,7 +547,7 @@ def open_or_reuse_session(
         mode=mode,
         scope=scope,
         context_json=context,
-        interaction_locale=interaction_locale,
+        interaction_locale=normalized_interaction_locale,
         signature=sig,
         display_title=display_title or "",
     )

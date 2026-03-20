@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { ArrowLeft, Compass } from 'lucide-react'
+import { useUiLocale } from '@/contexts/UiLocaleContext'
 import { DraftReviewNavigator } from '@/components/atlas/review/DraftReviewNavigator'
 import type { DraftReviewKind } from '@/components/atlas/review/DraftReviewSummaryCard'
 import { DraftReviewTab } from '@/components/world-model/shared/DraftReviewTab'
@@ -24,6 +25,7 @@ export function StudioDraftReviewStage({
   onOpenAtlas: () => void
   onReturnToArtifact?: () => void
 }) {
+  const { t } = useUiLocale()
   const [reviewSearch, setReviewSearch] = useState('')
   const [reviewHighlight, setReviewHighlight] = useState<number | null>(null)
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -43,10 +45,10 @@ export function StudioDraftReviewStage({
               Studio
             </div>
             <h2 className="text-lg font-semibold text-foreground">
-              草稿审核
+              {t('studio.stage.draftReview.title')}
             </h2>
             <p className="text-sm text-muted-foreground">
-              在写作上下文中快速处理单项草稿；批量治理和更高密度工作交给 Atlas。
+              {t('studio.stage.draftReview.description')}
             </p>
           </div>
 
@@ -58,7 +60,7 @@ export function StudioDraftReviewStage({
                 className="rounded-[10px] px-4 py-2 text-sm font-medium"
               >
                 <ArrowLeft size={14} />
-                返回结果
+                {t('studio.stage.returnToResults')}
               </NwButton>
             ) : null}
             <NwButton
@@ -67,7 +69,7 @@ export function StudioDraftReviewStage({
               className="rounded-[10px] px-4 py-2 text-sm font-medium"
             >
               <Compass size={14} />
-              在 Atlas 中打开
+              {t('studio.stage.openInAtlas')}
             </NwButton>
           </div>
         </div>

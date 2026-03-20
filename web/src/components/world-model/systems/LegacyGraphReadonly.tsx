@@ -18,9 +18,9 @@ interface LegacyGraphEdge {
 
 function visibilityText(visibility?: Visibility): string {
   const locale = readDocumentUiLocale() ?? 'zh'
-  if (visibility === 'hidden') return locale === 'en' ? 'Hidden' : '隐藏'
-  if (visibility === 'reference') return locale === 'en' ? 'Reference' : '参考'
-  return locale === 'en' ? 'Active' : '活跃'
+  if (visibility === 'hidden') return translateUiMessage(locale, 'worldModel.common.visibilityHidden')
+  if (visibility === 'reference') return translateUiMessage(locale, 'worldModel.common.visibilityReference')
+  return translateUiMessage(locale, 'worldModel.common.visibilityActive')
 }
 
 export function LegacyGraphReadonly({ data }: { data: Record<string, unknown> }) {

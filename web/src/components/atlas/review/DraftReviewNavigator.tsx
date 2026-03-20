@@ -130,7 +130,7 @@ export function DraftReviewNavigator({
                 surface: 'atlas',
               }))}
             >
-              <Sparkles className="h-3 w-3" /> AI 整理
+              <Sparkles className="h-3 w-3" /> {t('worldModel.draftReview.aiCleanup')}
             </button>
           )}
         </div>

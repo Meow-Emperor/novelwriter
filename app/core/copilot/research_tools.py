@@ -11,10 +11,10 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from app.core.copilot.i18n import choose_locale_text
 from sqlalchemy.orm import Session
 
 from app.core.indexing import WINDOW_INDEX_STATUS_FRESH
+from app.core.copilot.messages import CopilotTextKey, get_copilot_text
 from app.core.copilot.scope import ScopeSnapshot
 from app.core.copilot.workspace import EvidencePack, Workspace, make_pack_id
 from app.language_policy import get_language_policy
@@ -24,6 +24,25 @@ logger = logging.getLogger(__name__)
 
 MAX_EVIDENCE_PACKS = 12
 _QUERY_TERM_SPLIT_RE = re.compile(r"[\s,，、；;|/]+")
+
+
+def _tool_text(
+    interaction_locale: str,
+    text_key: CopilotTextKey,
+    **params: object,
+) -> str:
+    return get_copilot_text(text_key, locale=interaction_locale, **params)
+
+
+def _append_tool_labeled_line(
+    text: str,
+    *,
+    interaction_locale: str,
+    label_key: CopilotTextKey,
+    value: str,
+) -> str:
+    label = _tool_text(interaction_locale, label_key)
+    return f"{text}\n{label}: {value}"
 
 _TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
@@ -130,10 +149,10 @@ def dispatch_tool(
         return _tool_read(tool_args.get("target_refs", []), db, novel_id, snapshot)
     return json.dumps(
         {
-            "error": choose_locale_text(
+            "error": _tool_text(
                 interaction_locale,
-                f"未知工具：{tool_name}",
-                f"Unknown tool: {tool_name}",
+                CopilotTextKey.TOOL_UNKNOWN_TOOL,
+                tool_name=tool_name,
             ),
         },
         ensure_ascii=False,
@@ -332,10 +351,11 @@ def _find_from_world_rows(
 
         excerpt = f"{entity.name} ({entity.entity_type}): {(entity.description or '')[:300]}"
         if attr_text:
-            excerpt += choose_locale_text(
-                interaction_locale,
-                f"\n属性: {attr_text}",
-                f"\nAttributes: {attr_text}",
+            excerpt = _append_tool_labeled_line(
+                excerpt,
+                interaction_locale=interaction_locale,
+                label_key=CopilotTextKey.TEXT_ATTRIBUTES_LABEL,
+                value=attr_text,
             )
 
         packs.append(EvidencePack(
@@ -373,11 +393,12 @@ def _find_from_world_rows(
     for system in snapshot.systems:
         text = f"{system.name} ({system.display_type}): {(system.description or '')[:300]}"
         if system.constraints:
-            text += choose_locale_text(
-                interaction_locale,
-                "\n约束: ",
-                "\nConstraints: ",
-            ) + "; ".join(str(item)[:80] for item in system.constraints[:6])
+            text = _append_tool_labeled_line(
+                text,
+                interaction_locale=interaction_locale,
+                label_key=CopilotTextKey.TEXT_CONSTRAINTS_LABEL,
+                value="; ".join(str(item)[:80] for item in system.constraints[:6]),
+            )
         match_terms = _summarize_matched_terms(
             _find_term_matches(text, query_terms, language=snapshot.novel_language)
         )
@@ -485,17 +506,19 @@ def _find_from_draft_auditors(
     for entity in snapshot.draft_entities:
         issues: list[str] = []
         if not entity.description or not entity.description.strip():
-            issues.append(choose_locale_text(interaction_locale, "空描述", "Missing description"))
+            issues.append(_tool_text(interaction_locale, CopilotTextKey.TOOL_ISSUE_MISSING_DESCRIPTION))
         if not entity.aliases:
-            issues.append(choose_locale_text(interaction_locale, "无别名", "No aliases"))
+            issues.append(_tool_text(interaction_locale, CopilotTextKey.TOOL_ISSUE_NO_ALIASES))
         attrs = snapshot.attributes_by_entity.get(entity.id, [])
         if not attrs:
-            issues.append(choose_locale_text(interaction_locale, "无属性", "No attributes"))
+            issues.append(_tool_text(interaction_locale, CopilotTextKey.TOOL_ISSUE_NO_ATTRIBUTES))
         if issues:
-            excerpt = choose_locale_text(
+            excerpt = _tool_text(
                 interaction_locale,
-                f"[草稿实体] {entity.name} ({entity.entity_type}) — 问题: {', '.join(issues)}",
-                f"[Draft entity] {entity.name} ({entity.entity_type}) — Issues: {', '.join(issues)}",
+                CopilotTextKey.TOOL_DRAFT_ENTITY_ISSUES_EXCERPT,
+                entity_name=entity.name,
+                entity_type=entity.entity_type,
+                issues=", ".join(issues),
             )
             packs.append(EvidencePack(
                 pack_id=make_pack_id(f"pk_draft_ent_{entity.id}", excerpt),
@@ -511,10 +534,12 @@ def _find_from_draft_auditors(
         if not relationship.description or not relationship.description.strip():
             src = snapshot.entities_by_id.get(relationship.source_id)
             tgt = snapshot.entities_by_id.get(relationship.target_id)
-            excerpt = choose_locale_text(
+            excerpt = _tool_text(
                 interaction_locale,
-                f"[草稿关系] {src.name if src else '?'} --[{relationship.label}]--> {tgt.name if tgt else '?'} — 空描述",
-                f"[Draft relationship] {src.name if src else '?'} --[{relationship.label}]--> {tgt.name if tgt else '?'} — Missing description",
+                CopilotTextKey.TOOL_DRAFT_RELATIONSHIP_MISSING_DESCRIPTION_EXCERPT,
+                source_name=src.name if src else "?",
+                label=relationship.label,
+                target_name=tgt.name if tgt else "?",
             )
             packs.append(EvidencePack(
                 pack_id=make_pack_id(f"pk_draft_rel_{relationship.id}", excerpt),
@@ -529,14 +554,15 @@ def _find_from_draft_auditors(
     for system in snapshot.draft_systems:
         issues: list[str] = []
         if not system.description or not system.description.strip():
-            issues.append(choose_locale_text(interaction_locale, "空描述", "Missing description"))
+            issues.append(_tool_text(interaction_locale, CopilotTextKey.TOOL_ISSUE_MISSING_DESCRIPTION))
         if not system.constraints:
-            issues.append(choose_locale_text(interaction_locale, "无约束", "No constraints"))
+            issues.append(_tool_text(interaction_locale, CopilotTextKey.TOOL_ISSUE_NO_CONSTRAINTS))
         if issues:
-            excerpt = choose_locale_text(
+            excerpt = _tool_text(
                 interaction_locale,
-                f"[草稿体系] {system.name} — 问题: {', '.join(issues)}",
-                f"[Draft system] {system.name} — Issues: {', '.join(issues)}",
+                CopilotTextKey.TOOL_DRAFT_SYSTEM_ISSUES_EXCERPT,
+                system_name=system.name,
+                issues=", ".join(issues),
             )
             packs.append(EvidencePack(
                 pack_id=make_pack_id(f"pk_draft_sys_{system.id}", excerpt),
@@ -615,10 +641,10 @@ def _tool_open(
     if not pack:
         return json.dumps(
             {
-                "error": choose_locale_text(
+                "error": _tool_text(
                     interaction_locale,
-                    f"未知线索包：{pack_id}。请先调用 find()。",
-                    f"Unknown pack_id: {pack_id}. Use find() first.",
+                    CopilotTextKey.TOOL_UNKNOWN_PACK,
+                    pack_id=pack_id,
                 ),
             },
             ensure_ascii=False,

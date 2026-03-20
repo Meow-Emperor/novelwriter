@@ -599,24 +599,24 @@ export function NovelStudioPage() {
   const contextualCopilotAction = useMemo(() => {
     if (activeStage === 'entity' && effectiveStudioEntityId !== null) {
       return {
-        title: '实体补完',
+        title: t('studio.contextualCopilot.entity.title'),
         description: effectiveStudioEntityName
-          ? `围绕「${effectiveStudioEntityName}」继续补全设定、核查依据与属性。`
-          : '继续补全当前实体的设定与属性。',
+          ? t('studio.contextualCopilot.entity.description', { subject: effectiveStudioEntityName })
+          : t('studio.contextualCopilot.entity.descriptionFallback'),
         onClick: openEntityCopilot,
       }
     }
     if (activeStage === 'relationship' && effectiveStudioEntityId !== null) {
       return {
-        title: '关系补完',
+        title: t('studio.contextualCopilot.relationship.title'),
         description: effectiveStudioEntityName
-          ? `围绕「${effectiveStudioEntityName}」的关系网络继续核查与补完。`
-          : '继续核查当前实体相关的关系线索。',
+          ? t('studio.contextualCopilot.relationship.description', { subject: effectiveStudioEntityName })
+          : t('studio.contextualCopilot.relationship.descriptionFallback'),
         onClick: openRelationshipCopilot,
       }
     }
     return undefined
-  }, [activeStage, effectiveStudioEntityId, effectiveStudioEntityName, openEntityCopilot, openRelationshipCopilot])
+  }, [activeStage, effectiveStudioEntityId, effectiveStudioEntityName, openEntityCopilot, openRelationshipCopilot, t])
 
   const handleDismissWorldOnboarding = () => {
     dismissWorldOnboarding(novelId, novel?.created_at)

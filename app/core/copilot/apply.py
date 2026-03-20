@@ -13,10 +13,10 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.core.copilot.i18n import choose_locale_text
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
+from app.core.copilot.messages import CopilotTextKey, get_copilot_text
 from app.core.world.crud import WorldCrudError
 from app.models import CopilotRun, WorldEntity, WorldRelationship, WorldSystem
 from app.schemas import (
@@ -31,6 +31,14 @@ from app.schemas import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _apply_text(
+    interaction_locale: str,
+    text_key: CopilotTextKey,
+    **params: object,
+) -> str:
+    return get_copilot_text(text_key, locale=interaction_locale, **params)
 
 
 @dataclass
@@ -75,45 +83,21 @@ def _build_apply_error_message(
     interaction_locale: str = "zh",
 ) -> str:
     if code == "suggestion_not_found":
-        return choose_locale_text(
-            interaction_locale,
-            "这条建议已经失效了，请重新生成一次。",
-            "This suggestion is no longer valid. Generate it again.",
-        )
+        return _apply_text(interaction_locale, CopilotTextKey.APPLY_ERROR_SUGGESTION_NOT_FOUND)
     if code == "already_applied":
-        return choose_locale_text(
-            interaction_locale,
-            "这条建议已经确认过了。",
-            "This suggestion was already applied.",
-        )
+        return _apply_text(interaction_locale, CopilotTextKey.APPLY_ERROR_ALREADY_APPLIED)
     if code == "not_actionable":
         reason = ((suggestion or {}).get("preview") or {}).get("non_actionable_reason")
         return (
             str(reason)
             if isinstance(reason, str) and reason.strip()
-            else choose_locale_text(
-                interaction_locale,
-                "这条建议目前还不能直接采纳。",
-                "This suggestion cannot be applied directly right now.",
-            )
+            else _apply_text(interaction_locale, CopilotTextKey.SUGGESTION_REASON_NOT_DIRECTLY_APPLICABLE)
         )
     if code == "copilot_target_stale":
-        return choose_locale_text(
-            interaction_locale,
-            "这条建议对应的内容刚刚发生了变化，请刷新后再试一次。",
-            "The underlying content just changed. Refresh and try again.",
-        )
+        return _apply_text(interaction_locale, CopilotTextKey.APPLY_ERROR_STALE)
     if code == "dependency_apply_failed":
-        return choose_locale_text(
-            interaction_locale,
-            "这条关系还依赖未确认的实体或设定。请先确认相关实体，再来确认这条关系。",
-            "This relationship still depends on unconfirmed entities or world details. Confirm those first, then apply the relationship.",
-        )
-    return choose_locale_text(
-        interaction_locale,
-        "这次确认没有成功，请稍后再试。",
-        "The apply step did not succeed. Please try again later.",
-    )
+        return _apply_text(interaction_locale, CopilotTextKey.APPLY_ERROR_DEPENDENCY_FAILED)
+    return _apply_text(interaction_locale, CopilotTextKey.APPLY_ERROR_GENERIC)
 
 
 def _collect_dependency_suggestion_ids(action: dict[str, Any]) -> list[str]:

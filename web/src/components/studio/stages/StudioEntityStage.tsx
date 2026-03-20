@@ -1,4 +1,5 @@
 import { ArrowLeft, Compass, Sparkles } from 'lucide-react'
+import { useUiLocale } from '@/contexts/UiLocaleContext'
 import { EntityDetail } from '@/components/world-model/entities/EntityDetail'
 import { NwButton } from '@/components/ui/nw-button'
 
@@ -15,6 +16,8 @@ export function StudioEntityStage({
   onOpenAtlas: () => void
   onOpenCopilot: () => void
 }) {
+  const { t } = useUiLocale()
+
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden" data-testid="studio-entity-stage">
       <div className="shrink-0 border-b border-[var(--nw-glass-border)] px-6 py-4">
@@ -24,10 +27,10 @@ export function StudioEntityStage({
               Studio
             </div>
             <h2 className="text-lg font-semibold text-foreground">
-              实体检查
+              {t('studio.stage.entity.title')}
             </h2>
             <p className="text-sm text-muted-foreground">
-              查看并轻量编辑当前上下文关联的实体；复杂结构治理仍留给 Atlas。
+              {t('studio.stage.entity.description')}
             </p>
           </div>
 
@@ -39,7 +42,7 @@ export function StudioEntityStage({
                 className="rounded-[10px] px-4 py-2 text-sm font-medium"
               >
                 <ArrowLeft size={14} />
-                返回结果
+                {t('studio.stage.returnToResults')}
               </NwButton>
             ) : null}
             <NwButton
@@ -48,7 +51,7 @@ export function StudioEntityStage({
               className="rounded-[10px] px-4 py-2 text-sm font-medium"
             >
               <Sparkles size={14} />
-              实体 Copilot
+              {t('studio.stage.entity.openCopilot')}
             </NwButton>
             <NwButton
               onClick={onOpenAtlas}
@@ -56,7 +59,7 @@ export function StudioEntityStage({
               className="rounded-[10px] px-4 py-2 text-sm font-medium"
             >
               <Compass size={14} />
-              在 Atlas 中打开
+              {t('studio.stage.openInAtlas')}
             </NwButton>
           </div>
         </div>

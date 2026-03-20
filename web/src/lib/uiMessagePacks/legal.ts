@@ -4,6 +4,7 @@ export const legalZhMessages = {
   'legal.lastUpdatedNote': ({ date }) => `最后更新 ${String(date ?? '')}`,
   'legal.contactLabel': '联系方式：',
   'legal.contactEmailLabel': '投诉邮箱：',
+  'legal.contact.unconfigured': '部署前请设置 VITE_LEGAL_CONTACT_EMAIL',
 
   'terms.eyebrow': 'NovWr · 用户规则',
   'terms.title': '用户规则',
@@ -82,6 +83,7 @@ export const legalEnMessages = {
   'legal.lastUpdatedNote': ({ date }) => `Last updated ${String(date ?? '')}`,
   'legal.contactLabel': 'Contact:',
   'legal.contactEmailLabel': 'Complaint email:',
+  'legal.contact.unconfigured': 'Set VITE_LEGAL_CONTACT_EMAIL before launch',
 
   'terms.eyebrow': 'NovWr · Terms',
   'terms.title': 'Terms of use',

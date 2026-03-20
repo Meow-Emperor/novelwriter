@@ -1,4 +1,5 @@
 import { BookOpen, Bot, Sparkles } from 'lucide-react'
+import { useUiLocale } from '@/contexts/UiLocaleContext'
 import { cn } from '@/lib/utils'
 import { WorldBuildPanel } from '@/components/world-model/shared/WorldBuildPanel'
 
@@ -21,9 +22,12 @@ export function StudioAssistantPanel({
   }
   className?: string
 }) {
-  const focusLabel = activeChapterReference ?? '等待选择章节'
+  const { t } = useUiLocale()
+  const focusLabel = activeChapterReference ?? t('studio.assistant.waitingSelectChapter')
   const continuationLabel =
-    latestChapterReference === null ? '尚未形成续写入口' : `仅最新章续写 · ${latestChapterReference}`
+    latestChapterReference === null
+      ? t('studio.assistant.noContinuationEntry')
+      : t('studio.assistant.latestContinuation', { chapter: latestChapterReference })
 
   return (
     <div className={cn('flex h-full min-h-0 flex-col gap-3', className)} data-testid="studio-assistant-rail">
@@ -39,7 +43,7 @@ export function StudioAssistantPanel({
                 Studio
               </div>
               <h2 className="mt-1 text-[16px] font-semibold tracking-[0.01em] text-foreground">
-                AI 工具
+                {t('studio.assistant.title')}
               </h2>
             </div>
           </div>
@@ -48,18 +52,18 @@ export function StudioAssistantPanel({
             <div className="rounded-[18px] border border-[var(--nw-glass-border)] bg-background/20 px-3 py-3">
               <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
                 <BookOpen className="h-3.5 w-3.5" />
-                当前焦点
+                {t('studio.assistant.currentFocus')}
               </div>
               <div className="mt-2 text-sm font-medium text-foreground">{focusLabel}</div>
-              <div className="mt-1 text-[11px] text-muted-foreground/76">共 {chapterCount} 章可切换</div>
+              <div className="mt-1 text-[11px] text-muted-foreground/76">{t('studio.assistant.chapterSwitchCount', { count: chapterCount })}</div>
             </div>
             <div className="rounded-[18px] border border-[var(--nw-glass-border)] bg-background/20 px-3 py-3">
               <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
                 <Sparkles className="h-3.5 w-3.5" />
-                续写入口
+                {t('studio.assistant.continuationEntry')}
               </div>
               <div className="mt-2 text-sm font-medium text-foreground">{continuationLabel}</div>
-              <div className="mt-1 text-[11px] text-muted-foreground/76">一键切到写作设置</div>
+              <div className="mt-1 text-[11px] text-muted-foreground/76">{t('studio.assistant.quickSwitch')}</div>
             </div>
           </div>
         </div>

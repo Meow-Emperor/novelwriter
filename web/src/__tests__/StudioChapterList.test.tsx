@@ -1,7 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { UiLocaleProvider } from '@/contexts/UiLocaleContext'
 import { StudioChapterList } from '@/components/studio/rail/StudioChapterList'
+
+function renderList(ui: React.ReactElement) {
+  return render(
+    <UiLocaleProvider>
+      {ui}
+    </UiLocaleProvider>,
+  )
+}
 
 describe('StudioChapterList', () => {
   const chapters = [
@@ -10,7 +19,7 @@ describe('StudioChapterList', () => {
   ]
 
   it('hides the create button when no create handler is available', () => {
-    render(
+    renderList(
       <StudioChapterList
         chapters={chapters}
         selectedChapterNumber={1}
@@ -28,7 +37,7 @@ describe('StudioChapterList', () => {
     const handleSelectChapter = vi.fn()
     const handleCreateChapter = vi.fn()
 
-    render(
+    renderList(
       <StudioChapterList
         chapters={chapters}
         selectedChapterNumber={1}
@@ -45,5 +54,26 @@ describe('StudioChapterList', () => {
 
     expect(handleSelectChapter).toHaveBeenCalledWith(2)
     expect(handleCreateChapter).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders rail chrome in English when the UI locale is en', () => {
+    localStorage.setItem('novwr_ui_locale', 'en')
+    document.documentElement.lang = 'en'
+
+    renderList(
+      <StudioChapterList
+        chapters={chapters}
+        selectedChapterNumber={1}
+        onSelectChapter={vi.fn()}
+        chapterCount={chapters.length}
+        onCreateChapter={vi.fn()}
+        isCreating={false}
+        activeStage="chapter"
+      />,
+    )
+
+    expect(screen.getByText('Chapters')).toBeInTheDocument()
+    expect(screen.getByTitle('Create chapter')).toBeInTheDocument()
+    expect(screen.getByText('2 chapters')).toBeInTheDocument()
   })
 })

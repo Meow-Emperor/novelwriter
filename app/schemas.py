@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import Enum
 
 from app.config import MAX_CONTEXT_CHAPTERS
-from app.language import DEFAULT_LANGUAGE, normalize_language_code
+from app.language import DEFAULT_LANGUAGE, normalize_copilot_interaction_locale, normalize_language_code
 from app.world_visibility import WorldVisibility, normalize_visibility
 
 WorldOrigin = Literal["manual", "bootstrap", "worldpack", "worldgen"]
@@ -894,6 +894,13 @@ class CopilotSessionOpenRequest(BaseModel):
     context: Optional[CopilotContextData] = None
     interaction_locale: str = Field(default="zh", max_length=10)
     display_title: str = Field(default="", max_length=255)
+
+    @field_validator("interaction_locale", mode="before")
+    @classmethod
+    def _normalize_interaction_locale(cls, value: object) -> object:
+        if isinstance(value, str):
+            return normalize_copilot_interaction_locale(value)
+        return value
 
     @model_validator(mode="after")
     def _validate_context_contract(self):

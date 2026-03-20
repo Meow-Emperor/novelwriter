@@ -225,6 +225,65 @@ class TestSessionOpenReuse:
         r2 = client.post(f"/api/novels/{novel.id}/world/copilot/sessions", json={"mode": "research", "scope": "whole_book", "interaction_locale": "en"}).json()
         assert r1["session_id"] != r2["session_id"]
 
+    def test_locale_aliases_reuse_same_session_and_return_normalized_locale(self, client, novel):
+        r1 = client.post(
+            f"/api/novels/{novel.id}/world/copilot/sessions",
+            json={"mode": "research", "scope": "whole_book", "interaction_locale": "en-US"},
+        ).json()
+        r2 = client.post(
+            f"/api/novels/{novel.id}/world/copilot/sessions",
+            json={"mode": "research", "scope": "whole_book", "interaction_locale": "en"},
+        ).json()
+        assert r1["session_id"] == r2["session_id"]
+        assert r1["interaction_locale"] == "en"
+        assert r2["interaction_locale"] == "en"
+
+    def test_non_string_interaction_locale_returns_422(self, client, novel):
+        from pydantic import ValidationError
+
+        from app.schemas import CopilotSessionOpenRequest
+
+        resp = client.post(
+            f"/api/novels/{novel.id}/world/copilot/sessions",
+            json={"mode": "research", "scope": "whole_book", "interaction_locale": 5},
+        )
+
+        assert resp.status_code == 422
+        with pytest.raises(ValidationError):
+            CopilotSessionOpenRequest(mode="research", scope="whole_book", interaction_locale=5)
+
+    def test_service_boundary_normalizes_interaction_locale_aliases(self, db, novel):
+        from app.core.copilot import open_or_reuse_session
+
+        session, created = open_or_reuse_session(
+            db,
+            novel.id,
+            1,
+            "research",
+            "whole_book",
+            None,
+            "en-US",
+            "English workspace",
+        )
+
+        assert created is True
+        assert session.interaction_locale == "en"
+
+        reused, created = open_or_reuse_session(
+            db,
+            novel.id,
+            1,
+            "research",
+            "whole_book",
+            None,
+            "en",
+            "English workspace 2",
+        )
+
+        assert created is False
+        assert reused.session_id == session.session_id
+        assert reused.interaction_locale == "en"
+
     def test_ui_surface_context_reuses_same_session_identity(self, client, novel, entities):
         r1 = client.post(
             f"/api/novels/{novel.id}/world/copilot/sessions",
@@ -704,6 +763,30 @@ class TestSuggestionCompilation:
         assert compiled[0].preview["actionable"] is False
         assert "Confirm those first" in (compiled[0].preview["non_actionable_reason"] or "")
 
+    def test_compile_suggestions_localizes_fallback_title_and_new_resource_label_to_english(self, db, novel, entities):
+        from app.core.copilot import compile_suggestions
+
+        snapshot = self._make_snapshot(entities, [], [], db)
+        raw = [{
+            "kind": "create_entity",
+            "summary": "Need a better-formed entity card",
+            "target_resource": "entity",
+            "delta": {},
+        }]
+
+        compiled = compile_suggestions(
+            raw,
+            [],
+            snapshot,
+            "research",
+            "whole_book",
+            interaction_locale="en",
+        )
+
+        assert compiled[0].title == "Suggestion 1"
+        assert compiled[0].preview["target_label"] == "New entity"
+        assert "incomplete" in (compiled[0].preview["non_actionable_reason"] or "")
+
     def test_create_relationship_with_same_run_entity_dependencies_compiles_actionable(self, db, novel, entities):
         from app.core.copilot import compile_suggestions
 
@@ -989,6 +1072,21 @@ class TestApplyContract:
         results = resp.json()["results"]
         assert results[0]["success"] is False
         assert results[0]["error_code"] == "copilot_target_stale"
+
+    def test_apply_endpoint_localizes_stale_error_to_english(self, client, db, novel, entities):
+        session, run = self._create_completed_run(db, novel, entities, interaction_locale="en")
+        db.delete(entities[0])
+        db.commit()
+
+        resp = client.post(
+            f"/api/novels/{novel.id}/world/copilot/sessions/{session.session_id}/runs/{run.run_id}/apply",
+            json={"suggestion_ids": ["sg_update"]},
+        )
+
+        result = resp.json()["results"][0]
+        assert result["success"] is False
+        assert result["error_code"] == "copilot_target_stale"
+        assert result["error_message"] == "The underlying content just changed. Refresh and try again."
 
     def test_apply_on_running_run_rejected(self, client, db, novel, entities):
         session = CopilotSession(session_id="sess-running", novel_id=novel.id, user_id=1, mode="research", scope="whole_book", interaction_locale="zh", signature="sig-r", display_title="")
@@ -2114,6 +2212,19 @@ class TestToolDispatch:
         has_draft = any("draft" in p.get("pack_id", "") for p in data["packs"])
         assert has_draft
 
+    def test_tool_find_drafts_localizes_quality_signals_to_english(self, db, novel, entities, chapters):
+        from app.core.copilot import Workspace, _tool_find
+
+        workspace = Workspace()
+        result = _tool_find("draft", "drafts", db, novel.id, novel, self._make_snapshot(db, novel), workspace, interaction_locale="en")
+        import json
+        data = json.loads(result)
+
+        assert data["total_found"] > 0
+        pack = workspace.evidence_packs[data["packs"][0]["pack_id"]]
+        assert "[Draft" in pack.preview_excerpt
+        assert any(issue in pack.preview_excerpt for issue in ("Missing description", "No aliases", "No attributes"))
+
     def test_tool_find_whole_book_prioritizes_world_rows(self, db, novel, entities, chapters):
         from app.core.copilot import Workspace, _tool_find
         workspace = Workspace()
@@ -2206,6 +2317,16 @@ class TestToolDispatch:
         import json
         data = json.loads(result)
         assert "error" in data
+
+    def test_tool_open_rejects_unknown_pack_in_english(self, db, novel, entities, chapters):
+        from app.core.copilot import Workspace, _tool_open
+
+        workspace = Workspace()
+        result = _tool_open("nonexistent_pack", 2000, db, novel, workspace, interaction_locale="en")
+        import json
+        data = json.loads(result)
+
+        assert data["error"] == "Unknown pack_id: nonexistent_pack. Use find() first."
 
     def test_tool_read_returns_live_entity_state(self, db, novel, entities, attributes):
         from app.core.copilot import _tool_read
@@ -3055,6 +3176,29 @@ class TestEvidenceFlow:
         assert pack_ev[0].preview_excerpt == "张三是主角"
         assert pack_ev[0].expanded is False
 
+    def test_workspace_evidence_localizes_reason_to_english(self, db, novel, entities, chapters):
+        from app.core.copilot import EvidenceItem, EvidencePack, Workspace, _evidence_from_workspace
+
+        base = [EvidenceItem(
+            evidence_id="ev_base", source_type="chapter_excerpt",
+            source_ref={"chapter_id": 1}, title="base", excerpt="text", why_relevant="test",
+        )]
+        workspace = Workspace()
+        workspace.evidence_packs["pk_ent_1_abc12345"] = EvidencePack(
+            pack_id="pk_ent_1_abc12345",
+            source_refs=[{"type": "entity", "id": entities[0].id}],
+            preview_excerpt="Zhang San is the protagonist",
+            anchor_terms=["Zhang San"],
+            support_count=2,
+            related_targets=[],
+        )
+
+        merged = _evidence_from_workspace(workspace, base, interaction_locale="en")
+
+        pack_ev = [e for e in merged if e.evidence_id.startswith("pack_")]
+        assert len(pack_ev) == 1
+        assert pack_ev[0].why_relevant == "Compiled from 2 related clues"
+
 
 # ===========================================================================
 # Workspace resume tests
@@ -3274,8 +3418,8 @@ class TestWorkspaceResume:
 class TestLeaseRecovery:
     @pytest.mark.asyncio
     async def test_lease_loss_during_execution_preserves_interrupted_state(self, db, novel, entities, chapters, monkeypatch):
+        from app.core.copilot.messages import CopilotTextKey, get_copilot_text
         from app.core.copilot import (
-            COPILOT_RUN_INTERRUPTED_MESSAGE,
             RunLeaseLostError,
             _interrupt_run,
             _utcnow_naive,
@@ -3286,13 +3430,14 @@ class TestLeaseRecovery:
 
         session, _ = open_or_reuse_session(db, novel.id, 1, "research", "whole_book", None, "zh", "")
         run = create_run(db, session, 1, "分析全书")
+        interrupted_message = get_copilot_text(CopilotTextKey.RUN_INTERRUPTED, locale="zh")
 
         async def mock_tool_loop(
             db_factory, novel_id, session_data, prompt, llm_config, user_id, snapshot, scenario, evidence,
             turn_intent, run_id="", worker_id="", inherited_workspace=None, **kwargs,
         ):
             interrupted_run = db.query(CopilotRun).filter(CopilotRun.run_id == run_id).first()
-            _interrupt_run(interrupted_run, message=COPILOT_RUN_INTERRUPTED_MESSAGE, now=_utcnow_naive())
+            _interrupt_run(interrupted_run, message=interrupted_message, now=_utcnow_naive())
             db.commit()
             raise RunLeaseLostError(run_id)
 
@@ -3305,7 +3450,7 @@ class TestLeaseRecovery:
 
         db.refresh(run)
         assert run.status == "interrupted"
-        assert run.error == COPILOT_RUN_INTERRUPTED_MESSAGE
+        assert run.error == interrupted_message
         assert run.finished_at is not None
 
         db.close = original_close

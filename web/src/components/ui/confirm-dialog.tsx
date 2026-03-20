@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button"
+import { useUiLocale } from "@/contexts/UiLocaleContext"
 
 export type ConfirmTone = "default" | "destructive" | "secondary"
 
@@ -24,13 +25,17 @@ export function ConfirmDialog({
     open,
     title,
     description,
-    confirmText = "确认",
-    cancelText = "取消",
+    confirmText,
+    cancelText,
     showCancel = true,
     tone = "default",
     onConfirm,
     onClose,
 }: ConfirmDialogProps) {
+    const { t } = useUiLocale()
+    const resolvedConfirmText = confirmText ?? t('dialog.confirm')
+    const resolvedCancelText = cancelText ?? t('dialog.cancel')
+
     if (!open) return null
 
     return (
@@ -56,11 +61,11 @@ export function ConfirmDialog({
                 <div className="px-6 py-4 flex justify-end gap-2">
                     {showCancel && (
                         <Button variant="outline" onClick={onClose} data-testid="confirm-cancel">
-                            {cancelText}
+                            {resolvedCancelText}
                         </Button>
                     )}
                     <Button variant={toneToVariant(tone)} onClick={onConfirm} data-testid="confirm-ok">
-                        {confirmText}
+                        {resolvedConfirmText}
                     </Button>
                 </div>
             </div>

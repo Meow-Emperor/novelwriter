@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import { useWorldRelationships } from '@/hooks/world/useRelationships'
 import { LABELS } from '@/constants/labels'
+import { useUiLocale } from '@/contexts/UiLocaleContext'
 import { useNovelCopilot } from '@/components/novel-copilot/NovelCopilotContext'
 import { buildRelationshipResearchCopilotLaunchArgs } from '@/components/novel-copilot/novelCopilotLauncher'
 import { Sparkles, Plus } from 'lucide-react'
@@ -21,6 +22,7 @@ export function RelationshipSidebarPanel({
   onOpenDraftReview: () => void
   className?: string
 }) {
+  const { t } = useUiLocale()
   const { data: relationships = [] } = useWorldRelationships(
     novelId,
     selectedEntityId !== null ? { entity_id: selectedEntityId } : undefined,
@@ -37,7 +39,7 @@ export function RelationshipSidebarPanel({
       className={cn('flex items-center gap-2 px-3 py-2', className)}
       data-testid="relationship-sidebar-panel"
     >
-      <span className="text-xs font-medium text-foreground">关系</span>
+      <span className="text-xs font-medium text-foreground">{t('worldModel.relationship.sidebarTitle')}</span>
       <span className="text-xs tabular-nums text-muted-foreground">{relationships.length}</span>
       {draftCount > 0 && (
         <>
@@ -47,7 +49,7 @@ export function RelationshipSidebarPanel({
             className="text-xs tabular-nums text-[hsl(var(--color-status-draft))] hover:text-foreground transition-colors"
             onClick={onOpenDraftReview}
           >
-            草稿 {draftCount}
+            {t('worldModel.relationship.sidebarDraftCount', { count: draftCount })}
           </button>
         </>
       )}
@@ -60,7 +62,7 @@ export function RelationshipSidebarPanel({
             entityName: selectedEntityName,
             surface: 'atlas',
           }))}
-          title="AI 建议"
+          title={t('worldModel.relationship.aiSuggestions')}
         >
           <Sparkles className="h-3.5 w-3.5" />
         </button>

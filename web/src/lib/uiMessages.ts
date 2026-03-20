@@ -1,8 +1,13 @@
+import {
+  getUiLocaleFallbackChain,
+  SUPPORTED_UI_LOCALES,
+  type UiLocale,
+} from '@/lib/uiLocaleSchema'
 import type { copilotZhMessages } from '@/lib/uiMessagePacks/copilot'
 import type { legalZhMessages } from '@/lib/uiMessagePacks/legal'
 import type { novelZhMessages } from '@/lib/uiMessagePacks/novel'
 
-export type UiLocale = 'zh' | 'en'
+export type { UiLocale } from '@/lib/uiLocaleSchema'
 
 export type UiMessageParams = Record<string, string | number | boolean | null | undefined>
 export type UiMessageValue = string | ((params: UiMessageParams) => string)
@@ -39,6 +44,8 @@ const chromeZhMessages = {
   'dialog.confirm': '确认',
   'dialog.cancel': '取消',
   'dialog.gotIt': '知道了',
+  'plainText.loading': '加载中...',
+  'plainText.empty': '暂无内容',
 } as const satisfies Record<string, UiMessageValue>
 
 const homeZhMessages = {
@@ -206,6 +213,8 @@ const enMessages: Partial<Record<UiMessageKey, UiMessageValue>> = {
   'dialog.confirm': 'Confirm',
   'dialog.cancel': 'Cancel',
   'dialog.gotIt': 'Got it',
+  'plainText.loading': 'Loading...',
+  'plainText.empty': 'No content yet',
 
   'home.hero.title': 'Continue your story inside a complete world model',
   'home.hero.description': 'NovWr uses a world model to drive AI continuation—not blind text generation, but long-form writing that actually understands your characters, relationships, and rules.',
@@ -317,20 +326,36 @@ const enMessages: Partial<Record<UiMessageKey, UiMessageValue>> = {
 
 }
 
-export const uiMessages: Record<UiLocale, Partial<Record<UiMessageKey, UiMessageValue>>> = {
-  zh: { ...zhMessages },
-  en: { ...enMessages },
+function createEmptyUiMessageCatalog(): Record<UiLocale, Partial<Record<UiMessageKey, UiMessageValue>>> {
+  return Object.fromEntries(
+    SUPPORTED_UI_LOCALES.map((locale) => [locale, {}]),
+  ) as Record<UiLocale, Partial<Record<UiMessageKey, UiMessageValue>>>
+}
+
+const baseUiMessages: Partial<Record<UiLocale, Partial<Record<UiMessageKey, UiMessageValue>>>> = {
+  zh: zhMessages,
+  en: enMessages,
+}
+
+export const uiMessages = createEmptyUiMessageCatalog()
+for (const locale of SUPPORTED_UI_LOCALES) {
+  const localeMessages = baseUiMessages[locale]
+  if (!localeMessages) continue
+  Object.assign(uiMessages[locale], localeMessages)
 }
 
 const registeredUiMessagePacks = new Set<object>()
 
 export function registerUiMessages(
-  messages: Record<UiLocale, Partial<Record<UiMessageKey, UiMessageValue>>>,
+  messages: Partial<Record<UiLocale, Partial<Record<UiMessageKey, UiMessageValue>>>>,
 ): void {
   if (registeredUiMessagePacks.has(messages)) return
   registeredUiMessagePacks.add(messages)
-  Object.assign(uiMessages.zh, messages.zh)
-  Object.assign(uiMessages.en, messages.en)
+  for (const locale of SUPPORTED_UI_LOCALES) {
+    const localeMessages = messages[locale]
+    if (!localeMessages) continue
+    Object.assign(uiMessages[locale], localeMessages)
+  }
 }
 
 function renderUiMessage(
@@ -348,7 +373,9 @@ export function translateUiMessage(
   key: UiMessageKey,
   params?: UiMessageParams,
 ): string {
-  const value = uiMessages[locale][key] ?? uiMessages.zh[key]
-  if (value) return renderUiMessage(value, params)
+  for (const fallbackLocale of getUiLocaleFallbackChain(locale)) {
+    const value = uiMessages[fallbackLocale][key]
+    if (value) return renderUiMessage(value, params)
+  }
   return `[missing:${String(key)}]`
 }

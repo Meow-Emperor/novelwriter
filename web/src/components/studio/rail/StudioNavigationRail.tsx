@@ -1,4 +1,6 @@
+import '@/lib/uiMessagePacks/novel'
 import { BookOpen } from 'lucide-react'
+import { useUiLocale } from '@/contexts/UiLocaleContext'
 import { Input } from '@/components/ui/input'
 import { StudioModeRailSection } from './StudioModeRailSection'
 import {
@@ -36,6 +38,7 @@ export function StudioNavigationRail({
   onOpenAtlas: () => void
   activeStage: NovelShellStage | null
 }) {
+  const { t } = useUiLocale()
   const hasSearch = searchQuery.trim().length > 0
 
   return (
@@ -53,7 +56,7 @@ export function StudioNavigationRail({
 
         <Input
           type="text"
-          placeholder="搜索章节..."
+          placeholder={t('studio.rail.searchChapters')}
           value={searchQuery}
           onChange={(e) => onSearchQueryChange(e.target.value)}
           className="h-8 rounded-lg border-none bg-background/40 text-[13px] shadow-sm transition-all placeholder:text-muted-foreground hover:bg-background/60 focus:bg-background focus-visible:ring-[1px] focus-visible:ring-accent focus-visible:ring-offset-0"
@@ -71,7 +74,7 @@ export function StudioNavigationRail({
 
         {hasSearch ? (
           <div className="px-2 text-[11px] text-muted-foreground">
-            搜索结果：{chapters.length} 项
+            {t('studio.rail.searchResults', { count: chapters.length })}
           </div>
         ) : null}
 

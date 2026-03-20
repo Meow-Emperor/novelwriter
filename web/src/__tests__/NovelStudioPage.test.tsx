@@ -567,4 +567,16 @@ describe('NovelStudioPage', () => {
     expect(screen.getByTestId('location-search')).toHaveTextContent('chapter=3')
     expect(screen.getByTestId('chapter-editor')).toBeInTheDocument()
   })
+
+  it('renders the studio rail in English when the UI locale is en', async () => {
+    localStorage.setItem('novwr_ui_locale', 'en')
+    document.documentElement.lang = 'en'
+
+    renderWithStudioShell('/novel/7?chapter=3')
+
+    expect(await screen.findByPlaceholderText('Search chapters...')).toBeInTheDocument()
+    expect(screen.getByText('Workspace')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Atlas world model/i })).toBeInTheDocument()
+    expect(screen.getByText('Chapters')).toBeInTheDocument()
+  })
 })

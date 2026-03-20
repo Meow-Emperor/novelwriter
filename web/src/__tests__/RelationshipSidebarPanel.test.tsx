@@ -41,7 +41,9 @@ vi.mock('@/hooks/world/useSystems', () => ({
   useUpdateSystem: (...args: unknown[]) => mockUseUpdateSystem(...args),
 }))
 
-function renderSection() {
+function renderSection({ locale = 'zh' }: { locale?: 'zh' | 'en' } = {}) {
+  localStorage.setItem('novwr_ui_locale', locale)
+  document.documentElement.lang = locale
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     createElement(
@@ -55,7 +57,7 @@ function renderSection() {
           null,
           createElement(
             NovelCopilotProvider,
-            { novelId: 1, interactionLocale: 'zh' },
+            { novelId: 1, interactionLocale: locale },
             createElement(RelationshipSidebarPanel, {
               novelId: 1,
               selectedEntityId: 101,
@@ -96,5 +98,17 @@ describe('RelationshipSidebarPanel', () => {
 
     expect(screen.getAllByText('苏瑶 ↔ 相关实体').length).toBeGreaterThan(0)
     expect(screen.getAllByText('关系上下文').length).toBeGreaterThan(0)
+  })
+
+  it('renders English chrome when the UI locale is en', async () => {
+    const user = userEvent.setup()
+    renderSection({ locale: 'en' })
+
+    expect(screen.getByText('Relationships')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /AI suggestions/i }))
+
+    expect(screen.getAllByText('苏瑶 ↔ related entities').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Relationship context').length).toBeGreaterThan(0)
   })
 })

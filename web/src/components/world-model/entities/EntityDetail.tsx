@@ -171,7 +171,7 @@ export function EntityDetail({ novelId, entityId, onDeleted, allowDelete = true,
                   stage: copilotStage,
                 }))}
               >
-                <Sparkles className="h-3 w-3" /> AI 补完
+                <Sparkles className="h-3 w-3" /> {t('worldModel.entity.aiEnrich')}
               </button>
             </div>
           </div>

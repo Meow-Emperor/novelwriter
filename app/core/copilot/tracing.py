@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from typing import Any, TYPE_CHECKING
 
-from app.core.copilot.i18n import choose_locale_text
+from app.core.copilot.messages import CopilotTextKey, get_copilot_text
 
 if TYPE_CHECKING:
     from app.core.copilot.workspace import Workspace
@@ -46,29 +46,53 @@ def _build_tool_trace_summary(
 ) -> str:
     payload = _maybe_parse_json_object(tool_result) or {}
     if isinstance(payload.get("error"), str):
-        return choose_locale_text(
-            interaction_locale,
-            f"检索步骤未完成：{_truncate_trace_text(payload['error'], limit=64)}",
-            f"Retrieval step did not finish: {_truncate_trace_text(payload['error'], limit=64)}",
+        return get_copilot_text(
+            CopilotTextKey.TRACE_RETRIEVAL_STEP_INCOMPLETE,
+            locale=interaction_locale,
+            error=_truncate_trace_text(payload["error"], limit=64),
         )
 
     if tool_name == "find":
-        query = _truncate_trace_text(str(tool_args.get("query", "") or choose_locale_text(interaction_locale, "（空查询）", "(empty query)")))
+        query = _truncate_trace_text(
+            str(
+                tool_args.get("query", "")
+                or get_copilot_text(CopilotTextKey.TRACE_EMPTY_QUERY, locale=interaction_locale)
+            ),
+        )
         scope = str(tool_args.get("scope", "all") or "all")
         total_found = payload.get("total_found")
-        summary = choose_locale_text(interaction_locale, f"搜索「{query}」", f'Search "{query}"')
+        summary = get_copilot_text(
+            CopilotTextKey.TRACE_FIND,
+            locale=interaction_locale,
+            query=query,
+        )
         if scope != "all":
-            summary += choose_locale_text(interaction_locale, f"（范围：{scope}）", f" (scope: {scope})")
+            summary += get_copilot_text(
+                CopilotTextKey.TRACE_FIND_SCOPE_SUFFIX,
+                locale=interaction_locale,
+                scope=scope,
+            )
         if isinstance(total_found, int):
-            summary += choose_locale_text(interaction_locale, f"，找到 {total_found} 组相关线索", f", found {total_found} groups of related clues")
+            summary += get_copilot_text(
+                CopilotTextKey.TRACE_FIND_TOTAL_SUFFIX,
+                locale=interaction_locale,
+                count=total_found,
+            )
         return summary
 
     if tool_name == "open":
         source_refs = payload.get("source_refs")
         source_count = len(source_refs) if isinstance(source_refs, list) else None
-        summary = choose_locale_text(interaction_locale, "展开更多上下文", "Expand more context")
+        summary = get_copilot_text(
+            CopilotTextKey.TRACE_OPEN,
+            locale=interaction_locale,
+        )
         if source_count is not None:
-            summary += choose_locale_text(interaction_locale, f"，补充了 {source_count} 条来源", f", added {source_count} source references")
+            summary += get_copilot_text(
+                CopilotTextKey.TRACE_OPEN_SOURCE_SUFFIX,
+                locale=interaction_locale,
+                count=source_count,
+            )
         return summary
 
     if tool_name == "read":
@@ -76,32 +100,53 @@ def _build_tool_trace_summary(
         target_count = len(target_refs) if isinstance(target_refs, list) else 0
         results = payload.get("results")
         result_count = len(results) if isinstance(results, list) else None
-        summary = choose_locale_text(interaction_locale, f"读取 {target_count} 个设定目标", f"Read {target_count} world targets")
+        summary = get_copilot_text(
+            CopilotTextKey.TRACE_READ_TARGETS,
+            locale=interaction_locale,
+            count=target_count,
+        )
         if result_count is not None:
-            summary += choose_locale_text(interaction_locale, f"，返回 {result_count} 条结果", f", returned {result_count} results")
+            summary += get_copilot_text(
+                CopilotTextKey.TRACE_READ_RESULTS_SUFFIX,
+                locale=interaction_locale,
+                count=result_count,
+            )
         return summary
 
     if tool_name == "load_scope_snapshot":
         entity_count = payload.get("entity_count")
         relationship_count = payload.get("relationship_count")
         draft_count = payload.get("draft_count")
-        parts = [choose_locale_text(interaction_locale, "刷新当前设定快照", "Refresh current world snapshot")]
+        parts = []
         if isinstance(entity_count, int):
-            parts.append(choose_locale_text(interaction_locale, f"实体 {entity_count}", f"entities {entity_count}"))
+            parts.append(get_copilot_text(CopilotTextKey.TRACE_REFRESH_ENTITIES, locale=interaction_locale, count=entity_count))
         if isinstance(relationship_count, int):
-            parts.append(choose_locale_text(interaction_locale, f"关系 {relationship_count}", f"relationships {relationship_count}"))
+            parts.append(get_copilot_text(CopilotTextKey.TRACE_REFRESH_RELATIONSHIPS, locale=interaction_locale, count=relationship_count))
         if isinstance(draft_count, int):
-            parts.append(choose_locale_text(interaction_locale, f"草稿 {draft_count}", f"drafts {draft_count}"))
-        return (
-            choose_locale_text(interaction_locale, "：", ": ").join(parts[:1])
-            + (
-                choose_locale_text(interaction_locale, f"，{' / '.join(parts[1:])}", f", {' / '.join(parts[1:])}")
-                if len(parts) > 1
-                else choose_locale_text(interaction_locale, "：已刷新上下文", ": context refreshed")
-            )
-        )
+            parts.append(get_copilot_text(CopilotTextKey.TRACE_REFRESH_DRAFTS, locale=interaction_locale, count=draft_count))
 
-    return choose_locale_text(interaction_locale, f"检索步骤「{tool_name}」已执行", f'The "{tool_name}" retrieval step completed')
+        summary = get_copilot_text(
+            CopilotTextKey.TRACE_REFRESH_SNAPSHOT,
+            locale=interaction_locale,
+        )
+        if parts:
+            summary += get_copilot_text(
+                CopilotTextKey.TRACE_REFRESH_COUNTS_SUFFIX,
+                locale=interaction_locale,
+                counts=" / ".join(parts),
+            )
+        else:
+            summary += get_copilot_text(
+                CopilotTextKey.TRACE_REFRESH_CONTEXT_REFRESHED_SUFFIX,
+                locale=interaction_locale,
+            )
+        return summary
+
+    return get_copilot_text(
+        CopilotTextKey.TRACE_GENERIC_TOOL_COMPLETED,
+        locale=interaction_locale,
+        tool_name=tool_name,
+    )
 
 
 def build_tool_journal_entry(
@@ -133,14 +178,21 @@ def _build_trace_from_tool_journal(workspace: Workspace, interaction_locale: str
             "step_id": "tool_mode",
             "kind": "tool_mode",
             "status": "completed",
-            "summary": choose_locale_text(interaction_locale, f"本轮通过分步检索整理信息，共执行 {tool_calls} 步", f"This run used {tool_calls} retrieval steps"),
+            "summary": get_copilot_text(
+                CopilotTextKey.TRACE_TOOL_MODE_USED_STEPS,
+                locale=interaction_locale,
+                count=tool_calls,
+            ),
         })
     else:
         trace_steps.append({
             "step_id": "tool_mode",
             "kind": "tool_mode",
             "status": "completed",
-            "summary": choose_locale_text(interaction_locale, "本轮未追加检索步骤，模型直接完成分析", "No extra retrieval steps were needed; the model completed the analysis directly"),
+            "summary": get_copilot_text(
+                CopilotTextKey.TRACE_TOOL_MODE_DIRECT,
+                locale=interaction_locale,
+            ),
         })
 
     for index, entry in enumerate(workspace.tool_journal, start=1):
@@ -148,7 +200,11 @@ def _build_trace_from_tool_journal(workspace: Workspace, interaction_locale: str
             "step_id": entry.get("step_id", f"tool_{index}"),
             "kind": entry.get("kind", _tool_kind_for_name(str(entry.get("tool", "")))),
             "status": entry.get("status", "completed"),
-            "summary": entry.get("summary") or choose_locale_text(interaction_locale, f"工具 {entry.get('tool', 'unknown')}：已执行", f"Tool {entry.get('tool', 'unknown')}: completed"),
+            "summary": entry.get("summary") or get_copilot_text(
+                CopilotTextKey.TRACE_TOOL_COMPLETED_FALLBACK,
+                locale=interaction_locale,
+                tool_name=entry.get("tool", "unknown"),
+            ),
         })
 
     return trace_steps
@@ -160,7 +216,10 @@ def build_running_trace(workspace: Workspace, interaction_locale: str = "zh") ->
         "step_id": "analyze_running",
         "kind": "analyze",
         "status": "running",
-        "summary": choose_locale_text(interaction_locale, "正在整理检索结果并生成回答...", "Compiling retrieval results and drafting the answer..."),
+        "summary": get_copilot_text(
+            CopilotTextKey.TRACE_ANALYZE_RUNNING,
+            locale=interaction_locale,
+        ),
     })
     return trace_steps
 
@@ -184,14 +243,20 @@ def build_completed_trace(
                 "step_id": "tool_mode",
                 "kind": "tool_mode",
                 "status": "completed",
-                "summary": choose_locale_text(interaction_locale, "本轮工具研究已完成", "The tool-based research pass completed"),
+                "summary": get_copilot_text(
+                    CopilotTextKey.TRACE_TOOL_LOOP_COMPLETED,
+                    locale=interaction_locale,
+                ),
             })
     elif execution_mode == "one_shot_unsupported":
         trace_steps.append({
             "step_id": "tool_mode",
             "kind": "tool_mode",
             "status": "completed",
-            "summary": choose_locale_text(interaction_locale, "当前模型不支持分步检索，已切换为直接分析", "The current model does not support multi-step retrieval, so the run switched to direct analysis"),
+            "summary": get_copilot_text(
+                CopilotTextKey.TRACE_ONE_SHOT_UNSUPPORTED,
+                locale=interaction_locale,
+            ),
         })
     elif execution_mode == "one_shot_fallback":
         reason = _truncate_trace_text(degraded_reason or "tool_loop_failed", limit=44)
@@ -199,19 +264,31 @@ def build_completed_trace(
             "step_id": "tool_mode",
             "kind": "tool_mode",
             "status": "completed",
-            "summary": choose_locale_text(interaction_locale, f"分步检索异常（{reason}），已切换为直接分析", f"Multi-step retrieval failed ({reason}), so the run switched to direct analysis"),
+            "summary": get_copilot_text(
+                CopilotTextKey.TRACE_ONE_SHOT_FAILED,
+                locale=interaction_locale,
+                reason=reason,
+            ),
         })
 
     trace_steps.append({
         "step_id": "evidence_complete",
         "kind": "evidence",
         "status": "completed",
-        "summary": choose_locale_text(interaction_locale, f"整理出 {evidence_count} 条可展示依据", f"Prepared {evidence_count} evidence items for display"),
+        "summary": get_copilot_text(
+            CopilotTextKey.TRACE_EVIDENCE_PREPARED,
+            locale=interaction_locale,
+            count=evidence_count,
+        ),
     })
     trace_steps.append({
         "step_id": "analyze_complete",
         "kind": "analyze",
         "status": "completed",
-        "summary": choose_locale_text(interaction_locale, f"分析完成，生成 {suggestion_count} 条建议", f"Analysis completed with {suggestion_count} suggestions"),
+        "summary": get_copilot_text(
+            CopilotTextKey.TRACE_ANALYSIS_COMPLETED,
+            locale=interaction_locale,
+            count=suggestion_count,
+        ),
     })
     return trace_steps

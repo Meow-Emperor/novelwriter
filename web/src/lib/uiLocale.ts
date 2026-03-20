@@ -1,15 +1,24 @@
-import type { UiLocale } from '@/lib/uiMessages'
+import {
+  DEFAULT_UI_LOCALE,
+  getUiLocaleDocumentLang,
+  getUiLocaleFallbackChain,
+  getUiLocaleIntlLocale,
+  parseUiLocale,
+  SUPPORTED_UI_LOCALES,
+  type UiLocale,
+} from '@/lib/uiLocaleSchema'
 
-export const DEFAULT_UI_LOCALE: UiLocale = 'zh'
-export const UI_LOCALE_STORAGE_KEY = 'novwr_ui_locale'
-
-export function parseUiLocale(value: string | null | undefined): UiLocale | null {
-  const normalized = (value ?? '').trim().toLowerCase()
-  if (!normalized) return null
-  const base = normalized.split(/[-_]/)[0]?.trim()
-  if (base === 'zh' || base === 'en') return base
-  return null
+export {
+  DEFAULT_UI_LOCALE,
+  getUiLocaleDocumentLang,
+  getUiLocaleFallbackChain,
+  getUiLocaleIntlLocale,
+  parseUiLocale,
+  SUPPORTED_UI_LOCALES,
+  type UiLocale,
 }
+
+export const UI_LOCALE_STORAGE_KEY = 'novwr_ui_locale'
 
 export function normalizeUiLocale(
   value: string | null | undefined,
@@ -52,6 +61,6 @@ export function persistUiLocale(locale: UiLocale): void {
 export function applyUiLocaleToDocument(locale: UiLocale): void {
   if (typeof document === 'undefined') return
   const root = document.documentElement
-  root.lang = locale === 'en' ? 'en' : 'zh-CN'
+  root.lang = getUiLocaleDocumentLang(locale)
   root.dataset.uiLocale = locale
 }

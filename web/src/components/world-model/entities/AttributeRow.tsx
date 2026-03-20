@@ -1,4 +1,5 @@
 import { GripVertical } from 'lucide-react'
+import { useUiLocale } from '@/contexts/UiLocaleContext'
 import { cn } from '@/lib/utils'
 import { InlineEdit } from '@/components/world-model/shared/InlineEdit'
 import { VisibilityDot } from '@/components/world-model/shared/VisibilityDot'
@@ -13,6 +14,7 @@ export function AttributeRow({ novelId, entityId, attribute, dragListeners }: {
   attribute: WorldEntityAttribute
   dragListeners?: SyntheticListenerMap
 }) {
+  const { t } = useUiLocale()
   const updateAttr = useUpdateAttribute(novelId, entityId)
   const deleteAttr = useDeleteAttribute(novelId, entityId)
 
@@ -28,8 +30,8 @@ export function AttributeRow({ novelId, entityId, attribute, dragListeners }: {
     >
       <div
         className="pt-1 text-muted-foreground/70 cursor-grab select-none"
-        aria-label="Drag to reorder"
-        title="拖动排序"
+        aria-label={t('worldModel.attribute.reorder')}
+        title={t('worldModel.attribute.reorder')}
         {...dragListeners}
       >
         <GripVertical className="h-3.5 w-3.5" />
@@ -86,8 +88,8 @@ export function AttributeRow({ novelId, entityId, attribute, dragListeners }: {
             'hover:text-[hsl(var(--color-danger))] focus-visible:text-[hsl(var(--color-danger))]',
           )}
           onClick={() => deleteAttr.mutate(attribute.id)}
-          aria-label="Delete attribute"
-          title="删除"
+          aria-label={t('worldModel.attribute.delete')}
+          title={t('worldModel.attribute.delete')}
         >
           ×
         </button>

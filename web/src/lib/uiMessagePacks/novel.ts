@@ -6,6 +6,8 @@ export const worldModelZhMessages = {
   'worldModel.common.relationships': '关系',
   'worldModel.common.systems': '体系',
   'worldModel.common.draftReview': '草稿审核',
+  'worldModel.common.statusDraft': '草稿',
+  'worldModel.common.statusConfirmed': '已确认',
   'worldModel.common.view': '查看',
   'worldModel.common.locate': '定位',
   'worldModel.common.reject': '拒绝',
@@ -22,6 +24,9 @@ export const worldModelZhMessages = {
   'worldModel.common.visibility': '可见性',
   'worldModel.common.description': '描述',
   'worldModel.common.aliases': '别名',
+  'worldModel.common.visibilityActive': '活跃',
+  'worldModel.common.visibilityReference': '参考',
+  'worldModel.common.visibilityHidden': '隐藏',
   'worldModel.common.unknownNode': '未知节点',
   'worldModel.common.unnamedNode': ({ index }) => `未命名节点 ${String(index ?? 0)}`,
   'worldModel.common.searchDrafts': '搜索草稿...',
@@ -49,6 +54,9 @@ export const worldModelZhMessages = {
   'worldModel.entity.column.truth': '真相',
   'worldModel.entity.column.visibility': '可见',
   'worldModel.entity.customTypePlaceholder': '自定义类型...',
+  'worldModel.attribute.reorder': '拖动排序',
+  'worldModel.attribute.delete': '删除属性',
+  'worldModel.entity.aiEnrich': 'AI 补完',
 
   'worldModel.relationship.empty': '选择一个实体查看关系',
   'worldModel.relationship.new': '创建关系',
@@ -57,6 +65,15 @@ export const worldModelZhMessages = {
   'worldModel.relationship.searchTargetPlaceholder': '搜索目标实体...',
   'worldModel.relationship.noMatchingTargets': '没有匹配的目标实体',
   'worldModel.relationship.labelPlaceholder': '关系标签',
+  'worldModel.relationship.delete': '删除关系',
+  'worldModel.relationship.deleteConfirm': '确定要删除这个关系吗？',
+  'worldModel.relationship.description': '关系描述',
+  'worldModel.relationship.descriptionPlaceholder': '（添加关系描述，决定续写质量）',
+  'worldModel.relationship.inspectorEmpty': '点击一条关系查看描述',
+  'worldModel.relationship.inspectorHint': '选择一条关系后，这里会展示其描述（更影响续写质量）',
+  'worldModel.relationship.sidebarTitle': '关系',
+  'worldModel.relationship.sidebarDraftCount': ({ count }) => `草稿 ${String(count ?? 0)}`,
+  'worldModel.relationship.aiSuggestions': 'AI 建议',
 
   'worldModel.system.new': '+ 新体系',
   'worldModel.system.back': '‹ 世界体系',
@@ -64,6 +81,12 @@ export const worldModelZhMessages = {
   'worldModel.system.deleteConfirm': '确认删除？',
   'worldModel.system.searchPlaceholder': '搜索体系...',
   'worldModel.system.namePlaceholder': '体系名称',
+  'worldModel.system.constraints': '规则约束',
+  'worldModel.system.addConstraint': '+ 添加约束',
+  'worldModel.system.addRoot': '+ 添加根节点',
+  'worldModel.system.addEvent': '+ 添加事件',
+  'worldModel.system.addItem': '+ 添加规则',
+  'worldModel.system.insert': '+ 插入',
   'worldModel.system.unsupportedType': '当前体系类型无法编辑，请检查数据是否已经迁移。',
   'worldModel.system.rejectAllTitle': '拒绝全部草稿体系？',
   'worldModel.system.rejectAllDescription': ({ count }) => `将删除 ${String(count ?? 0)} 个草稿体系。\n此操作不可撤销。`,
@@ -84,6 +107,7 @@ export const worldModelZhMessages = {
   'worldModel.bootstrap.failed': '执行失败',
   'worldModel.bootstrap.completedIndexRefresh': '全书检索已更新',
   'worldModel.bootstrap.summaryCounts': ({ entities, relationships }) => `${String(entities ?? 0)} 实体 · ${String(relationships ?? 0)} 关系`,
+  'worldModel.bootstrap.completedExtraction': ({ entities, relationships }) => `提取到 ${String(entities ?? 0)} 个实体、${String(relationships ?? 0)} 条关系`,
   'worldModel.bootstrap.confirmTitle': '危险操作：重新提取章节草稿',
   'worldModel.bootstrap.confirmDescription': '替换当前从章节提取的草稿（保留已确认内容），然后重新提取实体和关系。\n确认继续吗？',
   'worldModel.bootstrap.confirmAction': '确认重新提取',
@@ -140,6 +164,7 @@ export const worldModelZhMessages = {
   'worldModel.draftReview.noMatches': '没有匹配项',
   'worldModel.draftReview.noDrafts': '暂无草稿',
   'worldModel.draftReview.viewAll': '查看全部 →',
+  'worldModel.draftReview.aiCleanup': 'AI 整理',
   'worldModel.draftReview.rejectAndDelete': '拒绝并删除',
   'worldModel.draftReview.rejectAllTitle': ({ kind }) => `拒绝全部${String(kind ?? '')}？`,
   'worldModel.draftReview.rejectAllDescription': ({ count, kind }) => `将删除 ${String(count ?? 0)} 个草稿${String(kind ?? '')}。\n此操作不可撤销。`,
@@ -151,6 +176,82 @@ export const worldModelZhMessages = {
   'worldModel.onboarding.extractTitle': '从章节提取',
   'worldModel.onboarding.extractDescription': '从已上传的章节内容中自动提取实体与关系草稿。',
   'worldModel.onboarding.dismiss': '前往世界模型页稍后添加 →',
+
+  'worldModel.placeholder.key': '键名',
+  'worldModel.placeholder.value': '值',
+  'worldModel.placeholder.name': '名称',
+  'worldModel.placeholder.description': '描述',
+  'worldModel.placeholder.nodeName': '节点名称',
+  'worldModel.placeholder.eventName': '事件名称',
+  'worldModel.placeholder.time': '时间',
+  'worldModel.placeholder.constraint': '约束规则',
+  'worldModel.placeholder.systemName': '体系名称',
+
+  'worldModel.error.deleteFailed': '删除失败，请重试',
+  'worldModel.error.saveFailed': '保存失败，请重试',
+  'worldModel.error.confirmFailed': '确认失败，请重试',
+  'worldModel.error.rejectFailed': '拒绝失败，请重试',
+  'worldModel.error.bootstrapTriggerFailed': '操作失败，请重试',
+
+  'chapter.loadingContent': '加载章节内容...',
+  'chapter.emptySelectToRead': '选择一个章节开始阅读',
+
+  'worldpack.import.warning.ambiguous_alias': ({ alias, entity_keys }) =>
+    `别名“${String(alias ?? '')}”同时指向多个实体：${String(entity_keys ?? '')}` ,
+  'worldpack.import.warning.entity_missing_name': ({ key }) =>
+    `实体“${String(key ?? '')}”缺少名称，已跳过`,
+  'worldpack.import.warning.entity_missing_name_preserve_existing': ({ key }) =>
+    `实体“${String(key ?? '')}”缺少名称；为关系解析保留了现有行`,
+  'worldpack.import.warning.entity_name_conflict': ({ name }) =>
+    `实体名“${String(name ?? '')}”已存在且绑定到其他 worldpack 身份，已跳过`,
+  'worldpack.import.warning.entity_linked_by_name': ({ key, name }) =>
+    `实体“${String(key ?? '')}”已按名称“${String(name ?? '')}”关联到现有行`,
+  'worldpack.import.warning.relationship_missing_label': '关系缺少标签，已跳过',
+  'worldpack.import.warning.relationship_missing_refs': ({ source_key, target_key }) =>
+    `关系缺少引用：source_key='${String(source_key ?? '')}'，target_key='${String(target_key ?? '')}'`,
+  'worldpack.import.warning.system_missing_name': '体系缺少名称，已跳过',
+  'worldpack.import.warning.system_name_conflict': ({ name }) =>
+    `体系名“${String(name ?? '')}”已被其他包占用，已跳过`,
+  'worldpack.import.warning.skip_delete_promoted_entity': ({ key }) =>
+    `实体“${String(key ?? '')}”存在非 worldpack 依赖，已保留`,
+  'worldpack.import.warning.preserved_entities_skipped': ({ count, sample }) =>
+    `跳过覆盖 ${String(count ?? 0)} 个受保护实体：${String(sample ?? '')}`,
+  'worldpack.import.warning.preserved_attributes_skipped': ({ count, sample, more_entities_count }) =>
+    `跳过覆盖 ${String(count ?? 0)} 个受保护属性：${String(sample ?? '')}${
+      Number(more_entities_count ?? 0) > 0 ? ` (+${String(more_entities_count ?? 0)} more entities)` : ''
+    }`,
+  'worldpack.import.warning.preserved_relationships_skipped': ({ count, sample }) =>
+    `跳过覆盖 ${String(count ?? 0)} 条受保护关系：${String(sample ?? '')}`,
+  'worldpack.import.warning.preserved_systems_skipped': ({ count, sample }) =>
+    `跳过覆盖 ${String(count ?? 0)} 个受保护体系：${String(sample ?? '')}`,
+  'worldpack.import.warning.duplicate_entity_key': ({ key }) =>
+    `payload 中存在重复实体 key“${String(key ?? '')}”，已跳过`,
+
+  'world.generate.warning.system_item_missing_time': '时间线条目缺少时间，已跳过',
+  'world.generate.warning.system_display_type_conflict': ({ name, downgraded_display_type }) =>
+    `体系“${String(name ?? '')}”在分块间结构类型冲突，已降级为 ${String(downgraded_display_type ?? '')}`,
+  'world.generate.warning.entity_missing_name': '实体名称为空，已跳过',
+  'world.generate.warning.relationship_missing_fields': '关系缺少 source/target/label，已跳过',
+  'world.generate.warning.relationship_unknown_entity': ({ source, target }) =>
+    `关系引用了未知实体，已丢弃（${String(source ?? '')} -> ${String(target ?? '')}）`,
+  'world.generate.warning.relationship_self_reference': ({ entity }) =>
+    `关系的 source 与 target 相同，已跳过（${String(entity ?? '')}）`,
+  'world.generate.warning.relationship_duplicate': ({ label }) =>
+    `重复关系已丢弃（${String(label ?? '')}）`,
+  'world.generate.warning.system_missing_name': '体系名称为空，已跳过',
+  'world.generate.warning.system_duplicate': ({ name }) =>
+    `重复体系名已丢弃（${String(name ?? '')}）`,
+  'world.generate.warning.system_name_conflict': ({ name }) =>
+    `体系名已存在，已跳过（${String(name ?? '')}）`,
+
+  'continuation.prosecheck.warning.repeated_ngram': ({ phrase, count }) =>
+    `检测到重复短语“${String(phrase ?? '')}”（出现 ${String(count ?? 0)} 次）`,
+  'continuation.prosecheck.warning.long_paragraph': ({ length, unit }) =>
+    `段落偏长（约 ${String(length ?? 0)} ${String(unit ?? '') === 'words' ? '词' : '字'}）`,
+  'continuation.prosecheck.warning.abnormal_sentence_length': ({ length, unit }) =>
+    `句子偏长（约 ${String(length ?? 0)} ${String(unit ?? '') === 'words' ? '词' : '字'}）`,
+  'continuation.prosecheck.warning.summary_tone': ({ phrase }) =>
+    `检测到总结/分析式表达“${String(phrase ?? '')}”，可能不适合正文叙事`,
 } as const satisfies Record<string, UiMessageValue>
 
 export const continuationZhMessages = {
@@ -236,6 +337,65 @@ export const continuationZhMessages = {
   'studio.chapter.updated': ({ time }: UiMessageParams) => `${String(time ?? '')}更新`,
   'studio.chapter.edit': '编辑',
   'studio.chapter.delete': '删除章节',
+  'studio.rail.workspace': '工作区',
+  'studio.rail.continuationTitle': '续写设置',
+  'studio.rail.continuationDescription': ({ chapter }: UiMessageParams) => `基于${String(chapter ?? '')}配置下一次续写`,
+  'studio.rail.atlasTitle': 'Atlas 世界模型',
+  'studio.rail.atlasDescription': '进入关系图谱、审核与深度整理',
+  'studio.rail.searchChapters': '搜索章节...',
+  'studio.rail.searchResults': ({ count }: UiMessageParams) => `搜索结果：${String(count ?? 0)} 项`,
+  'studio.rail.chapters': '章节',
+  'studio.rail.createChapter': '新建章节',
+  'studio.rail.noChapters': '暂无章节',
+  'studio.rail.chapterCount': ({ count }: UiMessageParams) => `共 ${String(count ?? 0)} 章`,
+  'studio.stage.returnToResults': '返回结果',
+  'studio.stage.openInAtlas': '在 Atlas 中打开',
+  'studio.stage.entity.title': '实体检查',
+  'studio.stage.entity.description': '查看并轻量编辑当前上下文关联的实体；复杂结构治理仍留给 Atlas。',
+  'studio.stage.entity.openCopilot': '实体 Copilot',
+  'studio.stage.relationship.title': '关系检查',
+  'studio.stage.relationship.currentEntity': '当前实体',
+  'studio.stage.relationship.description': ({ subject }: UiMessageParams) => `围绕 ${String(subject ?? '')} 轻量检查关系描述、一致性与草稿确认；图谱与拓扑修改仍留在 Atlas。`,
+  'studio.stage.relationship.openCopilot': '关系 Copilot',
+  'studio.stage.relationship.noContext': '未找到可检查的实体上下文。',
+  'studio.stage.relationship.entityWithId': ({ id }: UiMessageParams) => `实体 ${String(id ?? '')}`,
+  'studio.stage.relationship.forEntity': ({ subject }: UiMessageParams) => `${String(subject ?? '')} 的关系`,
+  'studio.stage.relationship.count': ({ count }: UiMessageParams) => `共 ${String(count ?? 0)} 条关系`,
+  'studio.stage.relationship.empty': '暂无关系',
+  'studio.stage.relationship.unnamed': '未命名关系',
+  'studio.stage.draftReview.title': '草稿审核',
+  'studio.stage.draftReview.description': '在写作上下文中快速处理单项草稿；批量治理和更高密度工作交给 Atlas。',
+  'studio.stage.system.title': '体系检查',
+  'studio.stage.system.description': '在写作上下文中检查体系描述与可见性；结构编辑、约束维护和更高密度治理仍留给 Atlas。',
+  'studio.stage.system.sidebarTitle': '世界体系',
+  'studio.stage.system.count': ({ count }: UiMessageParams) => `共 ${String(count ?? 0)} 个体系`,
+  'studio.stage.system.empty': '暂无体系',
+  'studio.stage.system.unnamed': '未命名体系',
+  'studio.stage.system.selectPrompt': '选择一个体系开始检查。',
+  'studio.stage.system.confirm': '确认体系',
+  'studio.stage.system.help': 'Studio 只处理体系的轻量检查与元信息编辑；约束、层级/时间线/列表结构等深度编辑请转到 Atlas。',
+  'studio.stage.system.descriptionSection': '描述',
+  'studio.stage.system.summary.legacyGraph': '旧图谱类型，仅在 Atlas 中提供完整只读查看。',
+  'studio.stage.system.summary.hierarchy': ({ count }: UiMessageParams) => `层级节点 ${String(count ?? 0)} 个`,
+  'studio.stage.system.summary.timeline': ({ count }: UiMessageParams) => `时间节点 ${String(count ?? 0)} 个`,
+  'studio.stage.system.summary.list': ({ count }: UiMessageParams) => `列表规则 ${String(count ?? 0)} 条`,
+  'studio.assistant.title': 'AI 工具',
+  'studio.assistant.currentFocus': '当前焦点',
+  'studio.assistant.chapterSwitchCount': ({ count }: UiMessageParams) => `共 ${String(count ?? 0)} 章可切换`,
+  'studio.assistant.continuationEntry': '续写入口',
+  'studio.assistant.quickSwitch': '一键切到写作设置',
+  'studio.assistant.waitingSelectChapter': '等待选择章节',
+  'studio.assistant.noContinuationEntry': '尚未形成续写入口',
+  'studio.assistant.latestContinuation': ({ chapter }: UiMessageParams) => `仅最新章续写 · ${String(chapter ?? '')}`,
+  'studio.contextualCopilot.entity.title': '实体补完',
+  'studio.contextualCopilot.entity.description': ({ subject }: UiMessageParams) => `围绕「${String(subject ?? '')}」继续补全设定、核查依据与属性。`,
+  'studio.contextualCopilot.entity.descriptionFallback': '继续补全当前实体的设定与属性。',
+  'studio.contextualCopilot.relationship.title': '关系补完',
+  'studio.contextualCopilot.relationship.description': ({ subject }: UiMessageParams) => `围绕「${String(subject ?? '')}」的关系网络继续核查与补完。`,
+  'studio.contextualCopilot.relationship.descriptionFallback': '继续核查当前实体相关的关系线索。',
+  'studio.injectionSummary.title': ({ count }: UiMessageParams) => `注入摘要 · ${String(count ?? 0)} 个元素`,
+  'studio.injectionSummary.empty': '无注入内容',
+  'studio.injectionSummary.openInAtlas': '在 Atlas 中查看全部',
 } as const satisfies Record<string, UiMessageValue>
 export const novelZhMessages = {
   ...worldModelZhMessages,
@@ -248,6 +408,8 @@ export const novelEnMessages = {
   'worldModel.common.relationships': 'Relationships',
   'worldModel.common.systems': 'Systems',
   'worldModel.common.draftReview': 'Draft review',
+  'worldModel.common.statusDraft': 'Draft',
+  'worldModel.common.statusConfirmed': 'Confirmed',
   'worldModel.common.view': 'View',
   'worldModel.common.locate': 'Locate',
   'worldModel.common.reject': 'Reject',
@@ -264,6 +426,9 @@ export const novelEnMessages = {
   'worldModel.common.visibility': 'Visibility',
   'worldModel.common.description': 'Description',
   'worldModel.common.aliases': 'Aliases',
+  'worldModel.common.visibilityActive': 'Active',
+  'worldModel.common.visibilityReference': 'Reference',
+  'worldModel.common.visibilityHidden': 'Hidden',
   'worldModel.common.unknownNode': 'Unknown node',
   'worldModel.common.unnamedNode': ({ index }) => `Unnamed node ${String(index ?? 0)}`,
   'worldModel.common.searchDrafts': 'Search drafts...',
@@ -291,6 +456,9 @@ export const novelEnMessages = {
   'worldModel.entity.column.truth': 'Truth',
   'worldModel.entity.column.visibility': 'Visible',
   'worldModel.entity.customTypePlaceholder': 'Custom type...',
+  'worldModel.attribute.reorder': 'Drag to reorder',
+  'worldModel.attribute.delete': 'Delete attribute',
+  'worldModel.entity.aiEnrich': 'AI enrich',
 
   'worldModel.relationship.empty': 'Select an entity to view relationships',
   'worldModel.relationship.new': 'Create relationship',
@@ -299,6 +467,15 @@ export const novelEnMessages = {
   'worldModel.relationship.searchTargetPlaceholder': 'Search target entities...',
   'worldModel.relationship.noMatchingTargets': 'No matching target entities',
   'worldModel.relationship.labelPlaceholder': 'Relationship label',
+  'worldModel.relationship.delete': 'Delete relationship',
+  'worldModel.relationship.deleteConfirm': 'Delete this relationship?',
+  'worldModel.relationship.description': 'Relationship description',
+  'worldModel.relationship.descriptionPlaceholder': '(Add a relationship description to improve continuation quality)',
+  'worldModel.relationship.inspectorEmpty': 'Select a relationship to view its description',
+  'worldModel.relationship.inspectorHint': 'After you select a relationship, its description appears here and has a bigger impact on continuation quality',
+  'worldModel.relationship.sidebarTitle': 'Relationships',
+  'worldModel.relationship.sidebarDraftCount': ({ count }) => `Drafts ${String(count ?? 0)}`,
+  'worldModel.relationship.aiSuggestions': 'AI suggestions',
 
   'worldModel.system.new': '+ New system',
   'worldModel.system.back': '‹ Systems',
@@ -306,6 +483,12 @@ export const novelEnMessages = {
   'worldModel.system.deleteConfirm': 'Confirm delete?',
   'worldModel.system.searchPlaceholder': 'Search systems...',
   'worldModel.system.namePlaceholder': 'System name',
+  'worldModel.system.constraints': 'Constraints',
+  'worldModel.system.addConstraint': '+ Add constraint',
+  'worldModel.system.addRoot': '+ Add root node',
+  'worldModel.system.addEvent': '+ Add event',
+  'worldModel.system.addItem': '+ Add rule',
+  'worldModel.system.insert': '+ Insert',
   'worldModel.system.unsupportedType': 'This system type cannot be edited right now. Check whether the data still needs migration.',
   'worldModel.system.rejectAllTitle': 'Reject all draft systems?',
   'worldModel.system.rejectAllDescription': ({ count }) => `This will delete ${String(count ?? 0)} draft systems.\nThis cannot be undone.`,
@@ -326,6 +509,7 @@ export const novelEnMessages = {
   'worldModel.bootstrap.failed': 'Run failed',
   'worldModel.bootstrap.completedIndexRefresh': 'Whole-book retrieval refreshed',
   'worldModel.bootstrap.summaryCounts': ({ entities, relationships }) => `${String(entities ?? 0)} entities · ${String(relationships ?? 0)} relationships`,
+  'worldModel.bootstrap.completedExtraction': ({ entities, relationships }) => `Extracted ${String(entities ?? 0)} entities and ${String(relationships ?? 0)} relationships`,
   'worldModel.bootstrap.confirmTitle': 'Dangerous action: re-extract chapter drafts',
   'worldModel.bootstrap.confirmDescription': 'Replace the current drafts extracted from chapters (while keeping confirmed data), then extract entities and relationships again.\nContinue?',
   'worldModel.bootstrap.confirmAction': 'Confirm re-extract',
@@ -382,6 +566,7 @@ export const novelEnMessages = {
   'worldModel.draftReview.noMatches': 'No matching items',
   'worldModel.draftReview.noDrafts': 'No drafts yet',
   'worldModel.draftReview.viewAll': 'View all →',
+  'worldModel.draftReview.aiCleanup': 'AI cleanup',
   'worldModel.draftReview.rejectAndDelete': 'Reject and delete',
   'worldModel.draftReview.rejectAllTitle': ({ kind }) => `Reject all ${String(kind ?? '').toLowerCase()}?`,
   'worldModel.draftReview.rejectAllDescription': ({ count, kind }) => `This will delete ${String(count ?? 0)} draft ${String(kind ?? '').toLowerCase()}.\nThis cannot be undone.`,
@@ -393,6 +578,82 @@ export const novelEnMessages = {
   'worldModel.onboarding.extractTitle': 'Extract from chapters',
   'worldModel.onboarding.extractDescription': 'Automatically extract draft entities and relationships from the chapters you already uploaded.',
   'worldModel.onboarding.dismiss': 'Go to the world-model page and add it later →',
+
+  'worldModel.placeholder.key': 'Key',
+  'worldModel.placeholder.value': 'Value',
+  'worldModel.placeholder.name': 'Name',
+  'worldModel.placeholder.description': 'Description',
+  'worldModel.placeholder.nodeName': 'Node name',
+  'worldModel.placeholder.eventName': 'Event name',
+  'worldModel.placeholder.time': 'Time',
+  'worldModel.placeholder.constraint': 'Constraint',
+  'worldModel.placeholder.systemName': 'System name',
+
+  'worldModel.error.deleteFailed': 'Delete failed. Please try again.',
+  'worldModel.error.saveFailed': 'Save failed. Please try again.',
+  'worldModel.error.confirmFailed': 'Confirm failed. Please try again.',
+  'worldModel.error.rejectFailed': 'Reject failed. Please try again.',
+  'worldModel.error.bootstrapTriggerFailed': 'Action failed. Please try again.',
+
+  'chapter.loadingContent': 'Loading chapter content...',
+  'chapter.emptySelectToRead': 'Select a chapter to start reading',
+
+  'worldpack.import.warning.ambiguous_alias': ({ alias, entity_keys }) =>
+    `Alias "${String(alias ?? '')}" points to multiple entities: ${String(entity_keys ?? '')}`,
+  'worldpack.import.warning.entity_missing_name': ({ key }) =>
+    `Entity "${String(key ?? '')}" is missing a name and was skipped`,
+  'worldpack.import.warning.entity_missing_name_preserve_existing': ({ key }) =>
+    `Entity "${String(key ?? '')}" is missing a name; the existing row was kept for relationship resolution`,
+  'worldpack.import.warning.entity_name_conflict': ({ name }) =>
+    `Entity name "${String(name ?? '')}" already exists and is bound to another worldpack identity, so it was skipped`,
+  'worldpack.import.warning.entity_linked_by_name': ({ key, name }) =>
+    `Entity "${String(key ?? '')}" was linked to an existing row by name "${String(name ?? '')}"`,
+  'worldpack.import.warning.relationship_missing_label': 'A relationship was missing its label and was skipped',
+  'worldpack.import.warning.relationship_missing_refs': ({ source_key, target_key }) =>
+    `A relationship is missing references: source_key='${String(source_key ?? '')}', target_key='${String(target_key ?? '')}'`,
+  'worldpack.import.warning.system_missing_name': 'A system was missing its name and was skipped',
+  'worldpack.import.warning.system_name_conflict': ({ name }) =>
+    `System name "${String(name ?? '')}" is already used by another pack, so it was skipped`,
+  'worldpack.import.warning.skip_delete_promoted_entity': ({ key }) =>
+    `Entity "${String(key ?? '')}" has non-worldpack dependencies and was preserved`,
+  'worldpack.import.warning.preserved_entities_skipped': ({ count, sample }) =>
+    `Skipped overwriting ${String(count ?? 0)} protected entities: ${String(sample ?? '')}`,
+  'worldpack.import.warning.preserved_attributes_skipped': ({ count, sample, more_entities_count }) =>
+    `Skipped overwriting ${String(count ?? 0)} protected attributes: ${String(sample ?? '')}${
+      Number(more_entities_count ?? 0) > 0 ? ` (+${String(more_entities_count ?? 0)} more entities)` : ''
+    }`,
+  'worldpack.import.warning.preserved_relationships_skipped': ({ count, sample }) =>
+    `Skipped overwriting ${String(count ?? 0)} protected relationships: ${String(sample ?? '')}`,
+  'worldpack.import.warning.preserved_systems_skipped': ({ count, sample }) =>
+    `Skipped overwriting ${String(count ?? 0)} protected systems: ${String(sample ?? '')}`,
+  'worldpack.import.warning.duplicate_entity_key': ({ key }) =>
+    `Duplicate entity key "${String(key ?? '')}" found in the payload and skipped`,
+
+  'world.generate.warning.system_item_missing_time': 'A timeline item was missing its time and was skipped',
+  'world.generate.warning.system_display_type_conflict': ({ name, downgraded_display_type }) =>
+    `System "${String(name ?? '')}" had conflicting structure types across chunks, so it was downgraded to ${String(downgraded_display_type ?? '')}`,
+  'world.generate.warning.entity_missing_name': 'An entity had an empty name and was skipped',
+  'world.generate.warning.relationship_missing_fields': 'A relationship was missing source, target, or label and was skipped',
+  'world.generate.warning.relationship_unknown_entity': ({ source, target }) =>
+    `A relationship referenced an unknown entity and was discarded (${String(source ?? '')} -> ${String(target ?? '')})`,
+  'world.generate.warning.relationship_self_reference': ({ entity }) =>
+    `A relationship pointed back to the same entity and was skipped (${String(entity ?? '')})`,
+  'world.generate.warning.relationship_duplicate': ({ label }) =>
+    `A duplicate relationship was discarded (${String(label ?? '')})`,
+  'world.generate.warning.system_missing_name': 'A system had an empty name and was skipped',
+  'world.generate.warning.system_duplicate': ({ name }) =>
+    `A duplicate system name was discarded (${String(name ?? '')})`,
+  'world.generate.warning.system_name_conflict': ({ name }) =>
+    `A system name already exists and was skipped (${String(name ?? '')})`,
+
+  'continuation.prosecheck.warning.repeated_ngram': ({ phrase, count }) =>
+    `Repeated phrase "${String(phrase ?? '')}" detected (${String(count ?? 0)} times)`,
+  'continuation.prosecheck.warning.long_paragraph': ({ length, unit }) =>
+    `Long paragraph detected (about ${String(length ?? 0)} ${String(unit ?? '')})`,
+  'continuation.prosecheck.warning.abnormal_sentence_length': ({ length, unit }) =>
+    `Long sentence detected (about ${String(length ?? 0)} ${String(unit ?? '')})`,
+  'continuation.prosecheck.warning.summary_tone': ({ phrase }) =>
+    `Summary/analysis-style wording "${String(phrase ?? '')}" detected and may not fit body prose`,
   // -- Continuation Setup --
   'continuation.setup.basedOn': ({ chapter }) => `Continue from ${String(chapter ?? '')}`,
   'continuation.setup.charCount': ({ count }) => `${String(count ?? 0)} chars`,
@@ -475,6 +736,65 @@ export const novelEnMessages = {
   'studio.chapter.updated': ({ time }) => `updated ${String(time ?? '')}`,
   'studio.chapter.edit': 'Edit',
   'studio.chapter.delete': 'Delete chapter',
+  'studio.rail.workspace': 'Workspace',
+  'studio.rail.continuationTitle': 'Continuation settings',
+  'studio.rail.continuationDescription': ({ chapter }) => `Set up the next continuation from ${String(chapter ?? '')}`,
+  'studio.rail.atlasTitle': 'Atlas world model',
+  'studio.rail.atlasDescription': 'Open the relationship graph, review queue, and deep-governance tools',
+  'studio.rail.searchChapters': 'Search chapters...',
+  'studio.rail.searchResults': ({ count }) => `Search results: ${String(count ?? 0)} ${Number(count) === 1 ? 'item' : 'items'}`,
+  'studio.rail.chapters': 'Chapters',
+  'studio.rail.createChapter': 'Create chapter',
+  'studio.rail.noChapters': 'No chapters yet',
+  'studio.rail.chapterCount': ({ count }) => `${String(count ?? 0)} ${Number(count) === 1 ? 'chapter' : 'chapters'}`,
+  'studio.stage.returnToResults': 'Back to results',
+  'studio.stage.openInAtlas': 'Open in Atlas',
+  'studio.stage.entity.title': 'Entity check',
+  'studio.stage.entity.description': 'Review and lightly edit entities tied to the current context. Deeper structural governance still belongs in Atlas.',
+  'studio.stage.entity.openCopilot': 'Entity copilot',
+  'studio.stage.relationship.title': 'Relationship check',
+  'studio.stage.relationship.currentEntity': 'the current entity',
+  'studio.stage.relationship.description': ({ subject }) => `Review relationship descriptions, consistency, and draft confirmation around ${String(subject ?? '')} in a lightweight way; graph and topology changes still belong in Atlas.`,
+  'studio.stage.relationship.openCopilot': 'Relationship copilot',
+  'studio.stage.relationship.noContext': 'No entity context is available to review.',
+  'studio.stage.relationship.entityWithId': ({ id }) => `Entity ${String(id ?? '')}`,
+  'studio.stage.relationship.forEntity': ({ subject }) => `${String(subject ?? '')} relationships`,
+  'studio.stage.relationship.count': ({ count }) => `${String(count ?? 0)} ${Number(count) === 1 ? 'relationship' : 'relationships'}`,
+  'studio.stage.relationship.empty': 'No relationships yet',
+  'studio.stage.relationship.unnamed': 'Unnamed relationship',
+  'studio.stage.draftReview.title': 'Draft review',
+  'studio.stage.draftReview.description': 'Handle individual drafts quickly in the writing context. Batch governance and denser work stay in Atlas.',
+  'studio.stage.system.title': 'System check',
+  'studio.stage.system.description': 'Review system descriptions and visibility in the writing context. Structural editing, constraint maintenance, and deeper governance still belong in Atlas.',
+  'studio.stage.system.sidebarTitle': 'World systems',
+  'studio.stage.system.count': ({ count }) => `${String(count ?? 0)} ${Number(count) === 1 ? 'system' : 'systems'}`,
+  'studio.stage.system.empty': 'No systems yet',
+  'studio.stage.system.unnamed': 'Unnamed system',
+  'studio.stage.system.selectPrompt': 'Select a system to start reviewing.',
+  'studio.stage.system.confirm': 'Confirm system',
+  'studio.stage.system.help': 'Studio only handles lightweight system review and metadata edits. Move to Atlas for constraints, hierarchy/timeline/list structures, and deeper editing.',
+  'studio.stage.system.descriptionSection': 'Description',
+  'studio.stage.system.summary.legacyGraph': 'Legacy graph type. Full read-only inspection is available only in Atlas.',
+  'studio.stage.system.summary.hierarchy': ({ count }) => `${String(count ?? 0)} hierarchy ${Number(count) === 1 ? 'node' : 'nodes'}`,
+  'studio.stage.system.summary.timeline': ({ count }) => `${String(count ?? 0)} timeline ${Number(count) === 1 ? 'event' : 'events'}`,
+  'studio.stage.system.summary.list': ({ count }) => `${String(count ?? 0)} ${Number(count) === 1 ? 'list rule' : 'list rules'}`,
+  'studio.assistant.title': 'AI tools',
+  'studio.assistant.currentFocus': 'Current focus',
+  'studio.assistant.chapterSwitchCount': ({ count }) => `${String(count ?? 0)} ${Number(count) === 1 ? 'chapter' : 'chapters'} available`,
+  'studio.assistant.continuationEntry': 'Continuation entry',
+  'studio.assistant.quickSwitch': 'Jump straight to writing settings',
+  'studio.assistant.waitingSelectChapter': 'Waiting for a chapter selection',
+  'studio.assistant.noContinuationEntry': 'No continuation entry is available yet',
+  'studio.assistant.latestContinuation': ({ chapter }) => `Latest-chapter continuation only · ${String(chapter ?? '')}`,
+  'studio.contextualCopilot.entity.title': 'Entity enrichment',
+  'studio.contextualCopilot.entity.description': ({ subject }) => `Keep enriching “${String(subject ?? '')}” with setting details, supporting evidence, and attributes.`,
+  'studio.contextualCopilot.entity.descriptionFallback': 'Keep enriching the current entity with setting details and attributes.',
+  'studio.contextualCopilot.relationship.title': 'Relationship enrichment',
+  'studio.contextualCopilot.relationship.description': ({ subject }) => `Keep reviewing and enriching the relationship network around “${String(subject ?? '')}”.`,
+  'studio.contextualCopilot.relationship.descriptionFallback': 'Keep reviewing relationship clues connected to the current entity.',
+  'studio.injectionSummary.title': ({ count }) => `Injection summary · ${String(count ?? 0)} ${Number(count) === 1 ? 'item' : 'items'}`,
+  'studio.injectionSummary.empty': 'No injected content',
+  'studio.injectionSummary.openInAtlas': 'View everything in Atlas',
 } as const satisfies Record<keyof typeof novelZhMessages, UiMessageValue>
 
 export const novelUiMessages = {

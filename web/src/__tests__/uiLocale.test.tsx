@@ -2,7 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { UiLocaleProvider, useUiLocale } from '@/contexts/UiLocaleContext'
-import { resolveInitialUiLocale, UI_LOCALE_STORAGE_KEY } from '@/lib/uiLocale'
+import {
+  getUiLocaleFallbackChain,
+  parseUiLocale,
+  resolveInitialUiLocale,
+  UI_LOCALE_STORAGE_KEY,
+} from '@/lib/uiLocale'
 import { translateUiMessage, uiMessages, type UiMessageKey } from '@/lib/uiMessages'
 
 function LocaleProbe() {
@@ -37,6 +42,17 @@ describe('ui locale foundation', () => {
   it('prefers the saved locale preference', () => {
     localStorage.setItem(UI_LOCALE_STORAGE_KEY, 'en')
     expect(resolveInitialUiLocale()).toBe('en')
+  })
+
+  it('normalizes browser locale tags through the shared locale manifest', () => {
+    expect(parseUiLocale('en-US')).toBe('en')
+    expect(parseUiLocale('zh_Hans')).toBe('zh')
+    expect(parseUiLocale('fr-FR')).toBeNull()
+  })
+
+  it('uses the locale manifest fallback chain for translations', () => {
+    expect(getUiLocaleFallbackChain('en')).toEqual(['en', 'zh'])
+    expect(getUiLocaleFallbackChain('zh')).toEqual(['zh'])
   })
 
   it('falls back to zh when localStorage.getItem throws', () => {

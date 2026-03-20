@@ -6,10 +6,11 @@
 from __future__ import annotations
 
 import re
+from string import Template
 from typing import Any
 
-from app.core.copilot.i18n import choose_locale_text
 from app.core.copilot.scope import EvidenceItem, ScopeSnapshot
+from app.language import get_language_fallback_chain
 from app.models import WorldEntity, WorldRelationship, WorldSystem
 
 _QUICK_ACTION_FOCUS_ZH: dict[str, str] = {
@@ -274,6 +275,546 @@ _FOCUS_WORKFLOW_HINTS_EN: dict[str, str] = {
     ),
 }
 
+_PROMPT_LOCALE_REGISTRY: dict[str, dict[str, Any]] = {
+    "zh": {
+        "maps": {
+            "quick_action_focus": _QUICK_ACTION_FOCUS_ZH,
+            "stage_labels": _STAGE_LABELS_ZH,
+            "profile_labels": _PROFILE_LABELS_ZH,
+            "focus_labels": _FOCUS_LABELS_ZH,
+            "focus_capabilities": _FOCUS_CAPABILITIES_ZH,
+            "profile_instructions": _PROFILE_INSTRUCTIONS_ZH,
+            "focus_instructions": _FOCUS_INSTRUCTIONS_ZH,
+            "focus_workflow_hints": _FOCUS_WORKFLOW_HINTS_ZH,
+        },
+        "texts": {
+            "quick_action_prefix": "[研究重点: {focus}]",
+            "current_workspace": "当前工作区",
+            "surface_line": "- 当前界面：{surface} / {stage}",
+            "profile_line": "- 当前 copilot profile：{profile}",
+            "scenario_line": "- 当前 copilot 场景：{scenario}",
+            "focus_line": "- 当前焦点：{focus}",
+            "focus_entity_id_line": "- 当前焦点实体 ID：{entity_id}",
+            "capabilities_header": "- 你在这个界面可做的事：",
+            "intent_smalltalk": (
+                "当前输入更像寒暄或轻聊天。优先自然接话，并简短说明你知道自己处在哪个工作台、"
+                "当前能帮上的 2-4 件事情。不要主动生成 suggestions，不要主动展开大量世界知识或依据。"
+            ),
+            "intent_capability_query": (
+                "当前输入是在询问你在这个界面能做什么。优先围绕当前工作台、焦点和能力边界作答，"
+                "可以列出 2-4 件你现在就能做的事情。不要主动生成 suggestions，不要主动倾倒大段世界知识。"
+            ),
+            "intent_task_query": "当前输入是任务型问题。允许结合当前场景进行分析、检索和建议，但仍要先围绕当前工作台焦点回答。",
+            "entity_draft_tag": " [草稿]",
+            "entity_description_line": "  描述: {text}",
+            "entity_aliases_line": "  别名: {aliases}",
+            "entity_attribute_line": "  属性 {key}: {surface}{visibility}",
+            "relationship_draft_tag": " [草稿]",
+            "system_draft_tag": " [草稿]",
+            "system_description_line": "  描述: {text}",
+            "system_constraints_line": "  约束: {constraints}",
+            "name_separator": "、",
+            "none_entities": "（暂无实体）",
+            "none_relationships": "（暂无关系）",
+            "none_systems": "（暂无体系）",
+            "none_generic": "（暂无）",
+            "no_evidence": "（暂无证据）",
+            "section_entities": "### 实体",
+            "section_relationships": "### 关系",
+            "section_systems": "### 体系",
+            "section_draft_entities": "### Draft 实体\n",
+            "section_draft_relationships": "### Draft 关系\n",
+            "section_draft_systems": "### Draft 体系\n",
+            "section_related_confirmed_entities": "### 关联已确认实体（仅供定位）\n",
+            "language_interaction_rule": (
+                "用户交互语言是 {interaction_locale}，请用该语言回答。"
+                "但所有 canonical 名称、标签和证据引用必须保持小说原语言（{novel_lang}）。"
+            ),
+            "language_novel_rule": "请用小说语言（{novel_lang}）回答。",
+            "broad_loaded": "已加载全书概览：{entity_count} 个实体，{relationship_count} 条关系，{system_count} 个体系。",
+            "broad_entity_samples": "实体样本：{samples}",
+            "broad_relationship_samples": "关系样本：{samples}",
+            "broad_system_samples": "体系样本：{samples}",
+            "broad_draft_counts": "草稿计数：实体 {entity_count} / 关系 {relationship_count} / 体系 {system_count}",
+            "broad_on_demand_hint": "默认不在首轮展开全部世界行；需要细节时请优先按需检索或展开证据。",
+            "draft_workset_intro": "当前是草稿治理工作集。优先关注 draft 行本身；已确认实体只用于定位关系端点，不要把它们当成新的研究主题。",
+            "draft_counts": "草稿计数：实体 {entity_count} / 关系 {relationship_count} / 体系 {system_count}",
+            "whole_book_overview_loaded": "已加载全书概览（薄上下文）：{entity_count} 个实体，{relationship_count} 条关系，{system_count} 个体系，{draft_count} 个草稿。",
+            "whole_book_entity_examples": "实体示例：{samples}",
+            "whole_book_relationship_examples": "关系示例：{samples}",
+            "whole_book_system_examples": "体系示例：{samples}",
+            "whole_book_draft_detail_hint": "如需草稿细节，请切到草稿治理或用工具检查具体条目。",
+            "whole_book_thin_hint": "这个 profile 故意只做薄加载，请按需检索或展开证据。",
+            "focused_context_loaded": "已加载聚焦研究上下文：{entity_count} 个实体，{relationship_count} 条关系，{system_count} 个体系被自动预载。",
+            "focused_current_entity": "当前焦点实体：[Entity#{entity_id}] {entity_name} ({entity_type})",
+            "focus_attributes_label": "焦点属性：",
+            "loaded_entities": "已加载实体：{entities}",
+            "direct_relationships_label": "直接关系：\n",
+            "focused_expand_hint": "这个 profile 不会自动塞入全局体系和远距离实体；如需扩展，请按需调用工具。",
+            "draft_governance_loaded": "已加载草稿治理工作集：{entity_count} 个草稿实体，{relationship_count} 条草稿关系，{system_count} 个草稿体系。",
+            "draft_no_description_suffix": " — (无描述)",
+            "draft_confirmed_rows_hint": "这里只有在草稿关系需要端点标签时才会额外带入 confirmed 行；请把注意力保持在草稿工作集内。",
+            "workflow_hint_light": (
+                "1. 先根据当前工作台上下文自然接话\n"
+                "2. 简短说明你知道自己在哪个界面、现在能帮什么\n"
+                "3. 这一轮默认不要主动调用工具，也不要主动生成 suggestions\n"
+                "4. 若用户继续提出明确任务，再转入研究/检索模式"
+            ),
+        },
+        "templates": {
+            "workbench_assistant": Template(
+                """你是一个小说世界模型工作台助手（Copilot）。
+
+## 当前任务
+$runtime_instr
+
+## 当前工作台上下文
+$workbench_context
+
+## 当前轮次行为要求
+$intent_behavior
+
+## 语言规则
+$locale_instr
+canonical 名称/标签必须保持小说原语言。
+
+## 输出要求（JSON）
+{
+  "answer": "（必填）自然语言回答",
+  "cited_evidence_indices": [],
+  "suggestions": []
+}
+
+## 规则
+1. 当前轮次不要主动生成 suggestions
+2. 不要假装自己看到了大量章节证据；若用户后续提出具体任务，再进入检索/研究模式
+3. 回答里要体现你知道当前处在哪个工作台，以及你现在能帮什么
+"""
+            ),
+            "research_assistant": Template(
+                """你是一个小说世界模型研究助手（Copilot）。
+
+## 当前任务
+$runtime_instr
+
+## 当前工作台上下文
+$workbench_context
+
+## 当前轮次行为要求
+$intent_behavior
+
+## 语言规则
+$locale_instr
+canonical 名称/标签必须保持小说原语言。
+
+## 世界模型
+$world_model_text
+
+## 后端已检索的证据
+以下证据由后端从章节和世界模型中检索。你只能引用这些证据，不能编造新证据。
+$evidence_text
+
+## 输出要求（JSON）
+{
+  "answer": "（必填）自然语言分析/回答",
+  "cited_evidence_indices": [0, 1],
+  "suggestions": [
+    {
+      "kind": "update_entity | create_entity | update_relationship | create_relationship | update_system | create_system",
+      "title": "建议标题",
+      "summary": "一句话说明",
+      "cited_evidence_indices": [0],
+      "target_resource": "entity | relationship | system",
+      "target_id": "整数ID（update 类必填；create 类为 null）",
+      "delta": {
+        "name": "（可选）",
+        "entity_type": "（可选）",
+        "description": "（可选）",
+        "aliases": ["（可选）"],
+        "label": "（可选，relationship）",
+        "source_id": "（可选，relationship create）",
+        "target_id": "（可选，relationship create）",
+        "source_name": "（可选，relationship create；当关系涉及新实体时填写名称）",
+        "target_name": "（可选，relationship create；当关系涉及新实体时填写名称）",
+        "source_entity_type": "（可选，relationship create；当 source_name 是新实体时填写类型）",
+        "target_entity_type": "（可选，relationship create；当 target_name 是新实体时填写类型）",
+        "constraints": ["（可选，system）"],
+        "display_type": "（可选，system）",
+        "attributes": [
+          {"key": "属性名", "surface": "可见值"}
+        ]
+      }
+    }
+  ]
+}
+
+## 规则
+1. cited_evidence_indices 必须引用 [Evidence#N] 的索引，不能编造证据
+2. suggestions 只在有充分证据时才生成；没有 suggestions 是正常结果
+3. target_id 必须引用上面的 [Entity#ID] / [Rel#ID] / [System#ID]
+4. delta 中只包含需要修改/新增的字段
+5. 不要建议删除、合并或拆分操作
+6. attributes 数组用于建议新增或更新实体属性（key-value对）
+7. 如果 create_relationship 涉及尚未存在的新实体，必须同时生成对应的 create_entity 建议，并在关系 delta 里填写 source_name / target_name
+8. 实体不只包括人物，也包括势力、组织、地点、物件、概念、规则等；不要把所有新实体默认写成人物
+"""
+            ),
+            "tool_loop": Template(
+                """你是一个小说世界模型研究助手（Copilot）。你可以使用工具来检索证据。
+
+## 当前任务
+$runtime_instr
+
+## 当前工作台上下文
+$workbench_context
+
+## 当前轮次行为要求
+$intent_behavior
+
+## 语言规则
+$locale_instr
+canonical 名称/标签必须保持小说原语言。
+
+## 工具
+- load_scope_snapshot(): 重新加载世界模型状态（一般不需要，已自动加载）
+- find(query, scope?): 搜索证据。scope 可选: "story_text"（正文片段）、"world_rows"（实体/关系/体系）、"drafts"（草稿质量审查）、"all"（默认）
+- open(pack_id): 展开某个证据包的完整内容
+- read(target_refs): 读取实体/关系/体系的当前状态。参数: [{"type": "entity"|"relationship"|"system", "id": 整数}]
+
+## 建议工作流程
+$workflow_hint
+
+## 最终回答格式（JSON）
+{
+  "answer": "（必填）自然语言分析/回答",
+  "cited_evidence_indices": [],
+  "suggestions": [
+    {
+      "kind": "update_entity | create_entity | update_relationship | create_relationship | update_system | create_system",
+      "title": "建议标题",
+      "summary": "一句话说明",
+      "cited_evidence_indices": [],
+      "target_resource": "entity | relationship | system",
+      "target_id": "整数ID（update 类必填；create 类为 null）",
+      "delta": {
+        "name": "（可选）",
+        "entity_type": "（可选）",
+        "description": "（可选）",
+        "aliases": ["（可选）"],
+        "label": "（可选，relationship）",
+        "source_id": "（可选，relationship create）",
+        "target_id": "（可选，relationship create）",
+        "source_name": "（可选，relationship create；当关系涉及新实体时填写名称）",
+        "target_name": "（可选，relationship create；当关系涉及新实体时填写名称）",
+        "source_entity_type": "（可选，relationship create；当 source_name 是新实体时填写类型）",
+        "target_entity_type": "（可选，relationship create；当 target_name 是新实体时填写类型）",
+        "constraints": ["（可选，system）"],
+        "display_type": "（可选，system）",
+        "attributes": [
+          {"key": "属性名", "surface": "可见值"}
+        ]
+      }
+    }
+  ]
+}
+
+## 规则
+1. 只能基于工具返回的证据提出建议，不能编造
+2. 没有 suggestions 也是正常结果；若当前轮次是闲聊/能力询问，应默认返回空 suggestions
+3. target_id 必须引用已知的实体/关系/体系 ID
+4. delta 中只包含需要修改/新增的字段
+5. 不要建议删除、合并或拆分
+6. attributes 数组用于建议新增或更新实体属性（key-value对）
+7. 如果 create_relationship 涉及尚未存在的新实体，必须同时生成对应的 create_entity 建议，并在关系 delta 里填写 source_name / target_name
+8. 实体不只包括人物，也包括势力、组织、地点、物件、概念、规则等；不要把所有新实体默认写成人物
+"""
+            ),
+        },
+    },
+    "en": {
+        "maps": {
+            "quick_action_focus": _QUICK_ACTION_FOCUS_EN,
+            "stage_labels": _STAGE_LABELS_EN,
+            "profile_labels": _PROFILE_LABELS_EN,
+            "focus_labels": _FOCUS_LABELS_EN,
+            "focus_capabilities": _FOCUS_CAPABILITIES_EN,
+            "profile_instructions": _PROFILE_INSTRUCTIONS_EN,
+            "focus_instructions": _FOCUS_INSTRUCTIONS_EN,
+            "focus_workflow_hints": _FOCUS_WORKFLOW_HINTS_EN,
+        },
+        "texts": {
+            "quick_action_prefix": "[Research focus: {focus}]",
+            "current_workspace": "Current workspace",
+            "surface_line": "- Current surface: {surface} / {stage}",
+            "profile_line": "- Current copilot profile: {profile}",
+            "scenario_line": "- Current copilot scenario: {scenario}",
+            "focus_line": "- Current focus: {focus}",
+            "focus_entity_id_line": "- Current focus entity ID: {entity_id}",
+            "capabilities_header": "- What you can do here:",
+            "intent_smalltalk": "The current input looks like small talk. Reply naturally, mention which workspace you are in, and briefly list 2-4 things you can help with right now. Do not proactively generate suggestions or dump large amounts of world knowledge.",
+            "intent_capability_query": "The user is asking what you can do in this workspace. Answer around the current workbench, focus, and capability boundaries, and list 2-4 concrete things you can do right now. Do not proactively generate suggestions or dump large world-model summaries.",
+            "intent_task_query": "The current input is task-oriented. You may analyze, retrieve evidence, and propose suggestions within the current scenario, but anchor the response in the current workspace focus first.",
+            "entity_draft_tag": " [draft]",
+            "entity_description_line": "  Description: {text}",
+            "entity_aliases_line": "  Aliases: {aliases}",
+            "entity_attribute_line": "  Attribute {key}: {surface}{visibility}",
+            "relationship_draft_tag": " [draft]",
+            "system_draft_tag": " [draft]",
+            "system_description_line": "  Description: {text}",
+            "system_constraints_line": "  Constraints: {constraints}",
+            "name_separator": ", ",
+            "none_entities": "(No entities yet)",
+            "none_relationships": "(No relationships yet)",
+            "none_systems": "(No systems yet)",
+            "none_generic": "(None)",
+            "no_evidence": "(No evidence yet)",
+            "section_entities": "### Entities",
+            "section_relationships": "### Relationships",
+            "section_systems": "### Systems",
+            "section_draft_entities": "### Draft entities\n",
+            "section_draft_relationships": "### Draft relationships\n",
+            "section_draft_systems": "### Draft systems\n",
+            "section_related_confirmed_entities": "### Related confirmed entities (reference only)\n",
+            "language_interaction_rule": "The user's interaction language is {interaction_locale}. Respond in that language, but keep all canonical names, labels, and evidence references in the novel's original language ({novel_lang}).",
+            "language_novel_rule": "Respond in the novel's language ({novel_lang}).",
+            "broad_loaded": "Loaded whole-book overview: {entity_count} entities, {relationship_count} relationships, and {system_count} systems.",
+            "broad_entity_samples": "Entity samples: {samples}",
+            "broad_relationship_samples": "Relationship samples: {samples}",
+            "broad_system_samples": "System samples: {samples}",
+            "broad_draft_counts": "Draft counts: entities {entity_count} / relationships {relationship_count} / systems {system_count}",
+            "broad_on_demand_hint": "Do not expand every world row in the first pass. Retrieve or expand evidence on demand when details are needed.",
+            "draft_workset_intro": "This is the draft-governance workset. Focus on the draft rows themselves. Confirmed entities are included only to identify relationship endpoints and should not become new research topics.",
+            "draft_counts": "Draft counts: entities {entity_count} / relationships {relationship_count} / systems {system_count}",
+            "whole_book_overview_loaded": "Loaded whole-book overview (thin context): {entity_count} entities, {relationship_count} relationships, {system_count} systems, and {draft_count} draft rows.",
+            "whole_book_entity_examples": "Entity examples: {samples}",
+            "whole_book_relationship_examples": "Relationship examples: {samples}",
+            "whole_book_system_examples": "System examples: {samples}",
+            "whole_book_draft_detail_hint": "If you need draft details, switch to draft governance or inspect specific rows with tools.",
+            "whole_book_thin_hint": "This profile intentionally stays thin; retrieve or expand evidence on demand.",
+            "focused_context_loaded": "Loaded focused-research context: {entity_count} entities, {relationship_count} relationships, and {system_count} systems were auto-preloaded.",
+            "focused_current_entity": "Current focus entity: [Entity#{entity_id}] {entity_name} ({entity_type})",
+            "focus_attributes_label": "Focus attributes:",
+            "loaded_entities": "Loaded entities: {entities}",
+            "direct_relationships_label": "Direct relationships:\n",
+            "focused_expand_hint": "This profile does not auto-load global systems or distant entities. Use tools if you need to expand further.",
+            "draft_governance_loaded": "Loaded draft-governance workset: {entity_count} draft entities, {relationship_count} draft relationships, and {system_count} draft systems.",
+            "draft_no_description_suffix": " — (No description)",
+            "draft_confirmed_rows_hint": "Confirmed rows are only brought in here when a draft relationship needs endpoint labels. Keep your attention inside the draft workset.",
+            "workflow_hint_light": (
+                "1. Start by replying naturally from the current workbench context\n"
+                "2. Briefly show that you know which workspace you are in and what you can help with\n"
+                "3. Do not proactively call tools or generate suggestions in this turn\n"
+                "4. If the user follows up with a concrete task, then switch into retrieval or research mode"
+            ),
+        },
+        "templates": {
+            "workbench_assistant": Template(
+                """You are a novel world-model workbench assistant (Copilot).
+
+## Current task
+$runtime_instr
+
+## Current workbench context
+$workbench_context
+
+## Behavior for this turn
+$intent_behavior
+
+## Language rules
+$locale_instr
+Canonical names and labels must remain in the novel's original language.
+
+## Output format (JSON)
+{
+  "answer": "Natural-language answer (required)",
+  "cited_evidence_indices": [],
+  "suggestions": []
+}
+
+## Rules
+1. Do not proactively generate suggestions in this turn
+2. Do not pretend you have already seen large amounts of chapter evidence; wait for a concrete task before entering retrieval or research mode
+3. Make it clear that you know which workspace you are in and what you can help with right now
+"""
+            ),
+            "research_assistant": Template(
+                """You are a novel world-model research assistant (Copilot).
+
+## Current task
+$runtime_instr
+
+## Current workbench context
+$workbench_context
+
+## Behavior for this turn
+$intent_behavior
+
+## Language rules
+$locale_instr
+Canonical names and labels must remain in the novel's original language.
+
+## World model
+$world_model_text
+
+## Evidence retrieved by the backend
+The evidence below was retrieved from chapters and the world model by the backend. You may only cite this evidence and must not invent new evidence.
+$evidence_text
+
+## Output format (JSON)
+{
+  "answer": "Natural-language analysis or answer (required)",
+  "cited_evidence_indices": [0, 1],
+  "suggestions": [
+    {
+      "kind": "update_entity | create_entity | update_relationship | create_relationship | update_system | create_system",
+      "title": "Suggestion title",
+      "summary": "One-sentence explanation",
+      "cited_evidence_indices": [0],
+      "target_resource": "entity | relationship | system",
+      "target_id": "Integer ID (required for update kinds; null for create kinds)",
+      "delta": {
+        "name": "(optional)",
+        "entity_type": "(optional)",
+        "description": "(optional)",
+        "aliases": ["(optional)"],
+        "label": "(optional, relationship)",
+        "source_id": "(optional, relationship create)",
+        "target_id": "(optional, relationship create)",
+        "source_name": "(optional, relationship create; required when the relationship refers to a new entity)",
+        "target_name": "(optional, relationship create; required when the relationship refers to a new entity)",
+        "source_entity_type": "(optional, relationship create; required when source_name is a new entity)",
+        "target_entity_type": "(optional, relationship create; required when target_name is a new entity)",
+        "constraints": ["(optional, system)"],
+        "display_type": "(optional, system)",
+        "attributes": [
+          {"key": "Attribute name", "surface": "Visible value"}
+        ]
+      }
+    }
+  ]
+}
+
+## Rules
+1. cited_evidence_indices must reference [Evidence#N] entries that actually exist
+2. Generate suggestions only when evidence is sufficient; no suggestions is a normal outcome
+3. target_id values must reference the [Entity#ID] / [Rel#ID] / [System#ID] entries above
+4. delta must include only fields that need to be added or changed
+5. Do not suggest delete, merge, or split operations
+6. The attributes array is only for proposing added or updated entity attributes (key-value pairs)
+7. If create_relationship introduces a not-yet-existing entity, you must also emit the matching create_entity suggestion and fill source_name / target_name in the relationship delta
+8. Entities are not limited to people; they can also be factions, organizations, locations, objects, concepts, and rules. Do not default every new entity to Character
+"""
+            ),
+            "tool_loop": Template(
+                """You are a novel world-model research assistant (Copilot). You may use tools to retrieve evidence.
+
+## Current task
+$runtime_instr
+
+## Current workbench context
+$workbench_context
+
+## Behavior for this turn
+$intent_behavior
+
+## Language rules
+$locale_instr
+Canonical names and labels must remain in the novel's original language.
+
+## Tools
+- load_scope_snapshot(): Reload world-model state (entities, relationships, systems, drafts). Usually unnecessary because it is already loaded.
+- find(query, scope?): Search evidence. Optional scope values: "story_text" (chapter excerpts), "world_rows" (entities / relationships / systems), "drafts" (draft-quality review), "all" (default)
+- open(pack_id): Expand the full contents of an evidence pack
+- read(target_refs): Read the current live state of entities / relationships / systems. Argument shape: [{"type": "entity"|"relationship"|"system", "id": integer}]
+
+## Suggested workflow
+$workflow_hint
+
+## Final answer format (JSON)
+{
+  "answer": "Natural-language analysis or answer (required)",
+  "cited_evidence_indices": [],
+  "suggestions": [
+    {
+      "kind": "update_entity | create_entity | update_relationship | create_relationship | update_system | create_system",
+      "title": "Suggestion title",
+      "summary": "One-sentence explanation",
+      "cited_evidence_indices": [],
+      "target_resource": "entity | relationship | system",
+      "target_id": "Integer ID (required for update kinds; null for create kinds)",
+      "delta": {
+        "name": "(optional)",
+        "entity_type": "(optional)",
+        "description": "(optional)",
+        "aliases": ["(optional)"],
+        "label": "(optional, relationship)",
+        "source_id": "(optional, relationship create)",
+        "target_id": "(optional, relationship create)",
+        "source_name": "(optional, relationship create; required when the relationship refers to a new entity)",
+        "target_name": "(optional, relationship create; required when the relationship refers to a new entity)",
+        "source_entity_type": "(optional, relationship create; required when source_name is a new entity)",
+        "target_entity_type": "(optional, relationship create; required when target_name is a new entity)",
+        "constraints": ["(optional, system)"],
+        "display_type": "(optional, system)",
+        "attributes": [
+          {"key": "Attribute name", "surface": "Visible value"}
+        ]
+      }
+    }
+  ]
+}
+
+## Rules
+1. You may only propose suggestions based on evidence returned by tools
+2. No suggestions is a normal result. For small talk or capability questions, default to an empty suggestions array
+3. target_id values must reference known entity / relationship / system IDs
+4. delta must include only fields that need to be added or changed
+5. Do not suggest delete, merge, or split operations
+6. The attributes array is only for proposing added or updated entity attributes (key-value pairs)
+7. If create_relationship introduces a not-yet-existing entity, you must also emit the matching create_entity suggestion and fill source_name / target_name in the relationship delta
+8. Entities are not limited to people; they can also be factions, organizations, locations, objects, concepts, and rules. Do not default every new entity to Character
+"""
+            ),
+        },
+    },
+}
+
+
+def _prompt_map(locale: str | None, map_name: str, item_key: str, *, fallback_key: str | None = None) -> Any:
+    for lookup_key in (item_key, fallback_key):
+        if lookup_key is None:
+            continue
+        for candidate in get_language_fallback_chain(locale, default="zh"):
+            bundle = _PROMPT_LOCALE_REGISTRY.get(candidate)
+            if not bundle:
+                continue
+            mapping = bundle.get("maps", {}).get(map_name, {})
+            if lookup_key in mapping:
+                return mapping[lookup_key]
+    raise KeyError(f"Missing prompt map value {map_name}.{item_key}")
+
+
+def _prompt_text(locale: str | None, key: str, **params: object) -> str:
+    for candidate in get_language_fallback_chain(locale, default="zh"):
+        bundle = _PROMPT_LOCALE_REGISTRY.get(candidate)
+        if not bundle:
+            continue
+        template = bundle.get("texts", {}).get(key)
+        if template is not None:
+            return str(template).format(**params)
+    raise KeyError(f"Missing prompt text {key}")
+
+
+def _prompt_template(locale: str | None, key: str, **params: object) -> str:
+    for candidate in get_language_fallback_chain(locale, default="zh"):
+        bundle = _PROMPT_LOCALE_REGISTRY.get(candidate)
+        if not bundle:
+            continue
+        template = bundle.get("templates", {}).get(key)
+        if template is not None:
+            return template.substitute(**params)
+    raise KeyError(f"Missing prompt template {key}")
+
 
 def _strip_quick_action_prefix(prompt: str) -> str:
     for prefix in ("[研究重点:", "[Research focus:"):
@@ -292,15 +833,11 @@ def apply_quick_action_prompt(
     """Prefix the user prompt with an internal quick-action research focus."""
     if not quick_action_id:
         return prompt
-    focus_zh = _QUICK_ACTION_FOCUS_ZH.get(quick_action_id)
-    focus_en = _QUICK_ACTION_FOCUS_EN.get(quick_action_id)
-    if not focus_zh or not focus_en:
+    try:
+        focus = _prompt_map(interaction_locale, "quick_action_focus", quick_action_id)
+    except KeyError:
         return prompt
-    prefix = choose_locale_text(
-        interaction_locale,
-        f"[研究重点: {focus_zh}]",
-        f"[Research focus: {focus_en}]",
-    )
+    prefix = _prompt_text(interaction_locale, "quick_action_prefix", focus=focus)
     return f"{prefix}\n\n{prompt}"
 
 
@@ -358,78 +895,48 @@ def _build_workbench_context_text(
         stage_key = str(context.get("tab") or "").lower()
     else:
         stage_key = str(context.get("stage") or context.get("tab") or "").lower()
-    stage_label = choose_locale_text(
-        interaction_locale,
-        _STAGE_LABELS_ZH.get(stage_key, "当前工作区"),
-        _STAGE_LABELS_EN.get(stage_key, "Current workspace"),
-    )
+    try:
+        stage_label = _prompt_map(interaction_locale, "stage_labels", stage_key)
+    except KeyError:
+        stage_label = _prompt_text(interaction_locale, "current_workspace")
     focus_label = _resolve_focus_label(snapshot, session_data)
 
     lines = [
-        choose_locale_text(
+        _prompt_text(interaction_locale, "surface_line", surface=surface_label, stage=stage_label),
+        _prompt_text(
             interaction_locale,
-            f"- 当前界面：{surface_label} / {stage_label}",
-            f"- Current surface: {surface_label} / {stage_label}",
+            "profile_line",
+            profile=_prompt_map(interaction_locale, "profile_labels", snapshot.profile, fallback_key=snapshot.profile),
         ),
-        choose_locale_text(
+        _prompt_text(
             interaction_locale,
-            f"- 当前 copilot profile：{_PROFILE_LABELS_ZH.get(snapshot.profile, snapshot.profile)}",
-            f"- Current copilot profile: {_PROFILE_LABELS_EN.get(snapshot.profile, snapshot.profile)}",
-        ),
-        choose_locale_text(
-            interaction_locale,
-            f"- 当前 copilot 场景：{_FOCUS_LABELS_ZH.get(snapshot.focus_variant, _FOCUS_LABELS_ZH.get(scenario, scenario))}",
-            f"- Current copilot scenario: {_FOCUS_LABELS_EN.get(snapshot.focus_variant, _FOCUS_LABELS_EN.get(scenario, scenario))}",
+            "scenario_line",
+            scenario=_prompt_map(interaction_locale, "focus_labels", snapshot.focus_variant or scenario, fallback_key=scenario),
         ),
     ]
     if focus_label:
-        lines.append(
-            choose_locale_text(
-                interaction_locale,
-                f"- 当前焦点：{focus_label}",
-                f"- Current focus: {focus_label}",
-            )
-        )
+        lines.append(_prompt_text(interaction_locale, "focus_line", focus=focus_label))
     focus_entity_id = snapshot.focus_entity_id if isinstance(snapshot.focus_entity_id, int) else context.get("entity_id")
     if isinstance(focus_entity_id, int):
-        lines.append(
-            choose_locale_text(
-                interaction_locale,
-                f"- 当前焦点实体 ID：{focus_entity_id}",
-                f"- Current focus entity ID: {focus_entity_id}",
-            )
-        )
+        lines.append(_prompt_text(interaction_locale, "focus_entity_id_line", entity_id=focus_entity_id))
 
-    capabilities = choose_locale_text(
+    capabilities = _prompt_map(
         interaction_locale,
-        _FOCUS_CAPABILITIES_ZH.get(snapshot.focus_variant, _FOCUS_CAPABILITIES_ZH["whole_book"]),
-        _FOCUS_CAPABILITIES_EN.get(snapshot.focus_variant, _FOCUS_CAPABILITIES_EN["whole_book"]),
+        "focus_capabilities",
+        snapshot.focus_variant or "whole_book",
+        fallback_key="whole_book",
     )
-    lines.append(choose_locale_text(interaction_locale, "- 你在这个界面可做的事：", "- What you can do here:"))
+    lines.append(_prompt_text(interaction_locale, "capabilities_header"))
     lines.extend(f"  {idx}. {item}" for idx, item in enumerate(capabilities, start=1))
     return "\n".join(lines)
 
 
 def _build_intent_behavior_text(turn_intent: str, interaction_locale: str = "zh") -> str:
     if turn_intent == "smalltalk":
-        return choose_locale_text(
-            interaction_locale,
-            "当前输入更像寒暄或轻聊天。优先自然接话，并简短说明你知道自己处在哪个工作台、"
-            "当前能帮上的 2-4 件事情。不要主动生成 suggestions，不要主动展开大量世界知识或依据。",
-            "The current input looks like small talk. Reply naturally, mention which workspace you are in, and briefly list 2-4 things you can help with right now. Do not proactively generate suggestions or dump large amounts of world knowledge.",
-        )
+        return _prompt_text(interaction_locale, "intent_smalltalk")
     if turn_intent == "capability_query":
-        return choose_locale_text(
-            interaction_locale,
-            "当前输入是在询问你在这个界面能做什么。优先围绕当前工作台、焦点和能力边界作答，"
-            "可以列出 2-4 件你现在就能做的事情。不要主动生成 suggestions，不要主动倾倒大段世界知识。",
-            "The user is asking what you can do in this workspace. Answer around the current workbench, focus, and capability boundaries, and list 2-4 concrete things you can do right now. Do not proactively generate suggestions or dump large world-model summaries.",
-        )
-    return choose_locale_text(
-        interaction_locale,
-        "当前输入是任务型问题。允许结合当前场景进行分析、检索和建议，但仍要先围绕当前工作台焦点回答。",
-        "The current input is task-oriented. You may analyze, retrieve evidence, and propose suggestions within the current scenario, but anchor the response in the current workspace focus first.",
-    )
+        return _prompt_text(interaction_locale, "intent_capability_query")
+    return _prompt_text(interaction_locale, "intent_task_query")
 
 
 def _build_runtime_instruction_text(
@@ -437,16 +944,18 @@ def _build_runtime_instruction_text(
     scenario: str,
     interaction_locale: str = "zh",
 ) -> str:
-    profile_instr = choose_locale_text(
+    profile_instr = _prompt_map(
         interaction_locale,
-        _PROFILE_INSTRUCTIONS_ZH.get(snapshot.profile, ""),
-        _PROFILE_INSTRUCTIONS_EN.get(snapshot.profile, ""),
+        "profile_instructions",
+        snapshot.profile,
+        fallback_key=snapshot.profile,
     )
     focus_key = snapshot.focus_variant or scenario
-    focus_instr = choose_locale_text(
+    focus_instr = _prompt_map(
         interaction_locale,
-        _FOCUS_INSTRUCTIONS_ZH.get(focus_key, _FOCUS_INSTRUCTIONS_ZH["entity"]),
-        _FOCUS_INSTRUCTIONS_EN.get(focus_key, _FOCUS_INSTRUCTIONS_EN["entity"]),
+        "focus_instructions",
+        focus_key,
+        fallback_key="entity",
     )
     return f"{profile_instr}\n{focus_instr}".strip()
 
@@ -458,32 +967,22 @@ def _format_entity_rows_for_prompt(
 ) -> str:
     lines: list[str] = []
     for entity in entities:
-        draft_tag = choose_locale_text(interaction_locale, " [草稿]", " [draft]") if entity.status == "draft" else ""
+        draft_tag = _prompt_text(interaction_locale, "entity_draft_tag") if entity.status == "draft" else ""
         parts = [f"[Entity#{entity.id}]{draft_tag} {entity.name} ({entity.entity_type})"]
         if entity.description:
-            parts.append(
-                choose_locale_text(
-                    interaction_locale,
-                    f"  描述: {entity.description[:300]}",
-                    f"  Description: {entity.description[:300]}",
-                )
-            )
+            parts.append(_prompt_text(interaction_locale, "entity_description_line", text=entity.description[:300]))
         if entity.aliases:
-            parts.append(
-                choose_locale_text(
-                    interaction_locale,
-                    f"  别名: {', '.join(entity.aliases[:5])}",
-                    f"  Aliases: {', '.join(entity.aliases[:5])}",
-                )
-            )
+            parts.append(_prompt_text(interaction_locale, "entity_aliases_line", aliases=", ".join(entity.aliases[:5])))
         attrs = snapshot.attributes_by_entity.get(entity.id, [])
         for attr in attrs[:8]:
             vis = f" [{attr.visibility}]" if attr.visibility != "active" else ""
             parts.append(
-                choose_locale_text(
+                _prompt_text(
                     interaction_locale,
-                    f"  属性 {attr.key}: {attr.surface[:200]}{vis}",
-                    f"  Attribute {attr.key}: {attr.surface[:200]}{vis}",
+                    "entity_attribute_line",
+                    key=attr.key,
+                    surface=attr.surface[:200],
+                    visibility=vis,
                 )
             )
         lines.append("\n".join(parts))
@@ -505,7 +1004,7 @@ def _format_relationship_rows_for_prompt(
         tgt = snapshot.entities_by_id.get(relationship.target_id)
         src_name = src.name if src else f"Entity#{relationship.source_id}"
         tgt_name = tgt.name if tgt else f"Entity#{relationship.target_id}"
-        draft_tag = choose_locale_text(interaction_locale, " [草稿]", " [draft]") if relationship.status == "draft" else ""
+        draft_tag = _prompt_text(interaction_locale, "relationship_draft_tag") if relationship.status == "draft" else ""
         desc = f" — {relationship.description[:200]}" if relationship.description else ""
         lines.append(f"[Rel#{relationship.id}]{draft_tag} {src_name} --[{relationship.label}]--> {tgt_name}{desc}")
     return "\n".join(lines)
@@ -521,24 +1020,16 @@ def _format_system_rows_for_prompt(
 ) -> str:
     lines: list[str] = []
     for system in systems:
-        draft_tag = choose_locale_text(interaction_locale, " [草稿]", " [draft]") if system.status == "draft" else ""
+        draft_tag = _prompt_text(interaction_locale, "system_draft_tag") if system.status == "draft" else ""
         parts = [f"[System#{system.id}]{draft_tag} {system.name} ({system.display_type})"]
         if system.description:
-            parts.append(
-                choose_locale_text(
-                    interaction_locale,
-                    f"  描述: {system.description[:300]}",
-                    f"  Description: {system.description[:300]}",
-                )
-            )
+            parts.append(_prompt_text(interaction_locale, "system_description_line", text=system.description[:300]))
         if system.constraints:
-            parts.append(
-                choose_locale_text(
-                    interaction_locale,
-                    f"  约束: {'; '.join(str(constraint)[:100] for constraint in system.constraints[:5])}",
-                    f"  Constraints: {'; '.join(str(constraint)[:100] for constraint in system.constraints[:5])}",
-                )
-            )
+            parts.append(_prompt_text(
+                interaction_locale,
+                "system_constraints_line",
+                constraints="; ".join(str(constraint)[:100] for constraint in system.constraints[:5]),
+            ))
         lines.append("\n".join(parts))
     return "\n\n".join(lines)
 
@@ -558,12 +1049,8 @@ def _build_broad_exploration_world_overview(
     snapshot: ScopeSnapshot,
     interaction_locale: str = "zh",
 ) -> str:
-    name_separator = choose_locale_text(interaction_locale, "、", ", ")
-    entity_samples = name_separator.join(entity.name for entity in snapshot.entities[:6]) or choose_locale_text(
-        interaction_locale,
-        "（暂无实体）",
-        "(No entities yet)",
-    )
+    name_separator = _prompt_text(interaction_locale, "name_separator")
+    entity_samples = name_separator.join(entity.name for entity in snapshot.entities[:6]) or _prompt_text(interaction_locale, "none_entities")
     relationship_samples = []
     for relationship in snapshot.relationships[:4]:
         src = snapshot.entities_by_id.get(relationship.source_id)
@@ -574,59 +1061,33 @@ def _build_broad_exploration_world_overview(
     system_samples = (
         name_separator.join(system.name for system in snapshot.systems[:4])
         if snapshot.systems
-        else choose_locale_text(interaction_locale, "（暂无体系）", "(No systems yet)")
+        else _prompt_text(interaction_locale, "none_systems")
     )
     draft_count = len(snapshot.draft_entities) + len(snapshot.draft_relationships) + len(snapshot.draft_systems)
 
     parts = [
-        choose_locale_text(
+        _prompt_text(
             interaction_locale,
-            f"已加载全书概览：{len(snapshot.entities)} 个实体，{len(snapshot.relationships)} 条关系，{len(snapshot.systems)} 个体系。",
-            f"Loaded whole-book overview: {len(snapshot.entities)} entities, {len(snapshot.relationships)} relationships, and {len(snapshot.systems)} systems.",
+            "broad_loaded",
+            entity_count=len(snapshot.entities),
+            relationship_count=len(snapshot.relationships),
+            system_count=len(snapshot.systems),
         ),
-        choose_locale_text(
-            interaction_locale,
-            f"实体样本：{entity_samples}",
-            f"Entity samples: {entity_samples}",
-        ),
+        _prompt_text(interaction_locale, "broad_entity_samples", samples=entity_samples),
     ]
     if relationship_samples:
-        parts.append(
-            choose_locale_text(
-                interaction_locale,
-                f"关系样本：{'; '.join(relationship_samples)}",
-                f"Relationship samples: {'; '.join(relationship_samples)}",
-            )
-        )
+        parts.append(_prompt_text(interaction_locale, "broad_relationship_samples", samples="; ".join(relationship_samples)))
     if snapshot.systems:
-        parts.append(
-            choose_locale_text(
-                interaction_locale,
-                f"体系样本：{system_samples}",
-                f"System samples: {system_samples}",
-            )
-        )
+        parts.append(_prompt_text(interaction_locale, "broad_system_samples", samples=system_samples))
     if draft_count:
-        parts.append(
-            choose_locale_text(
-                interaction_locale,
-                "草稿计数："
-                f"实体 {len(snapshot.draft_entities)} / "
-                f"关系 {len(snapshot.draft_relationships)} / "
-                f"体系 {len(snapshot.draft_systems)}",
-                "Draft counts: "
-                f"entities {len(snapshot.draft_entities)} / "
-                f"relationships {len(snapshot.draft_relationships)} / "
-                f"systems {len(snapshot.draft_systems)}",
-            )
-        )
-    parts.append(
-        choose_locale_text(
+        parts.append(_prompt_text(
             interaction_locale,
-            "默认不在首轮展开全部世界行；需要细节时请优先按需检索或展开证据。",
-            "Do not expand every world row in the first pass. Retrieve or expand evidence on demand when details are needed.",
-        )
-    )
+            "broad_draft_counts",
+            entity_count=len(snapshot.draft_entities),
+            relationship_count=len(snapshot.draft_relationships),
+            system_count=len(snapshot.draft_systems),
+        ))
+    parts.append(_prompt_text(interaction_locale, "broad_on_demand_hint"))
     return "\n".join(parts)
 
 
@@ -636,55 +1097,43 @@ def _build_draft_governance_world_context(
 ) -> str:
     supporting_entities = [entity for entity in snapshot.entities if entity.status != "draft"]
     parts = [
-        choose_locale_text(
+        _prompt_text(interaction_locale, "draft_workset_intro"),
+        _prompt_text(
             interaction_locale,
-            "当前是草稿治理工作集。优先关注 draft 行本身；已确认实体只用于定位关系端点，不要把它们当成新的研究主题。",
-            "This is the draft-governance workset. Focus on the draft rows themselves. Confirmed entities are included only to identify relationship endpoints and should not become new research topics.",
-        ),
-        choose_locale_text(
-            interaction_locale,
-            "草稿计数："
-            f"实体 {len(snapshot.draft_entities)} / "
-            f"关系 {len(snapshot.draft_relationships)} / "
-            f"体系 {len(snapshot.draft_systems)}",
-            "Draft counts: "
-            f"entities {len(snapshot.draft_entities)} / "
-            f"relationships {len(snapshot.draft_relationships)} / "
-            f"systems {len(snapshot.draft_systems)}",
+            "draft_counts",
+            entity_count=len(snapshot.draft_entities),
+            relationship_count=len(snapshot.draft_relationships),
+            system_count=len(snapshot.draft_systems),
         ),
     ]
     if snapshot.draft_entities:
         parts.append(
-            choose_locale_text(interaction_locale, "### Draft 实体\n", "### Draft entities\n")
+            _prompt_text(interaction_locale, "section_draft_entities")
             + (
                 _format_entity_rows_for_prompt(snapshot.draft_entities, snapshot, interaction_locale)
-                or choose_locale_text(interaction_locale, "（暂无）", "(None)")
+                or _prompt_text(interaction_locale, "none_generic")
             )
         )
     if snapshot.draft_relationships:
         parts.append(
-            choose_locale_text(interaction_locale, "### Draft 关系\n", "### Draft relationships\n")
+            _prompt_text(interaction_locale, "section_draft_relationships")
             + (
                 _format_relationship_rows_for_prompt(snapshot.draft_relationships, snapshot, interaction_locale)
-                or choose_locale_text(interaction_locale, "（暂无）", "(None)")
+                or _prompt_text(interaction_locale, "none_generic")
             )
         )
     if snapshot.draft_systems:
         parts.append(
-            choose_locale_text(interaction_locale, "### Draft 体系\n", "### Draft systems\n")
+            _prompt_text(interaction_locale, "section_draft_systems")
             + (
                 _format_system_rows_for_prompt(snapshot.draft_systems, interaction_locale)
-                or choose_locale_text(interaction_locale, "（暂无）", "(None)")
+                or _prompt_text(interaction_locale, "none_generic")
             )
         )
     if supporting_entities:
         lines = [f"- {entity.name} ({entity.entity_type})" for entity in supporting_entities[:8]]
         parts.append(
-            choose_locale_text(
-                interaction_locale,
-                "### 关联已确认实体（仅供定位）\n",
-                "### Related confirmed entities (reference only)\n",
-            )
+            _prompt_text(interaction_locale, "section_related_confirmed_entities")
             + "\n".join(lines)
         )
     return "\n\n".join(parts)
@@ -696,32 +1145,20 @@ def _build_world_model_prompt_block(snapshot: ScopeSnapshot, interaction_locale:
     if snapshot.profile == "draft_governance":
         return _build_draft_governance_world_context(snapshot, interaction_locale)
 
-    entities_text = _format_entities_for_prompt(snapshot, interaction_locale) or choose_locale_text(
-        interaction_locale,
-        "（暂无实体）",
-        "(No entities yet)",
-    )
-    relationships_text = _format_relationships_for_prompt(snapshot, interaction_locale) or choose_locale_text(
-        interaction_locale,
-        "（暂无关系）",
-        "(No relationships yet)",
-    )
+    entities_text = _format_entities_for_prompt(snapshot, interaction_locale) or _prompt_text(interaction_locale, "none_entities")
+    relationships_text = _format_relationships_for_prompt(snapshot, interaction_locale) or _prompt_text(interaction_locale, "none_relationships")
     parts = [
-        choose_locale_text(interaction_locale, "### 实体", "### Entities"),
+        _prompt_text(interaction_locale, "section_entities"),
         entities_text,
         "",
-        choose_locale_text(interaction_locale, "### 关系", "### Relationships"),
+        _prompt_text(interaction_locale, "section_relationships"),
         relationships_text,
     ]
     if snapshot.systems:
         parts.extend([
             "",
-            choose_locale_text(interaction_locale, "### 体系", "### Systems"),
-            _format_systems_for_prompt(snapshot, interaction_locale) or choose_locale_text(
-                interaction_locale,
-                "（暂无体系）",
-                "(No systems yet)",
-            ),
+            _prompt_text(interaction_locale, "section_systems"),
+            _format_systems_for_prompt(snapshot, interaction_locale) or _prompt_text(interaction_locale, "none_systems"),
         ])
     return "\n".join(parts)
 
@@ -740,220 +1177,37 @@ def build_copilot_system_prompt(
     intent_behavior = _build_intent_behavior_text(turn_intent, interaction_locale)
 
     if interaction_locale and interaction_locale != novel_lang:
-        locale_instr = choose_locale_text(
+        locale_instr = _prompt_text(
             interaction_locale,
-            f"用户交互语言是 {interaction_locale}，请用该语言回答。"
-            f"但所有 canonical 名称、标签和证据引用必须保持小说原语言（{novel_lang}）。",
-            f"The user's interaction language is {interaction_locale}. Respond in that language, "
-            f"but keep all canonical names, labels, and evidence references in the novel's original language ({novel_lang}).",
+            "language_interaction_rule",
+            interaction_locale=interaction_locale,
+            novel_lang=novel_lang,
         )
     else:
-        locale_instr = choose_locale_text(
-            interaction_locale,
-            f"请用小说语言（{novel_lang}）回答。",
-            f"Respond in the novel's language ({novel_lang}).",
-        )
+        locale_instr = _prompt_text(interaction_locale, "language_novel_rule", novel_lang=novel_lang)
 
     world_model_text = _build_world_model_prompt_block(snapshot, interaction_locale)
-    evidence_text = _format_evidence_for_prompt(evidence) or choose_locale_text(
-        interaction_locale,
-        "（暂无证据）",
-        "(No evidence yet)",
-    )
+    evidence_text = _format_evidence_for_prompt(evidence) or _prompt_text(interaction_locale, "no_evidence")
 
     if not should_preload_world_context(turn_intent):
-        return choose_locale_text(
+        return _prompt_template(
             interaction_locale,
-            f"""你是一个小说世界模型工作台助手（Copilot）。
-
-## 当前任务
-{runtime_instr}
-
-## 当前工作台上下文
-{workbench_context}
-
-## 当前轮次行为要求
-{intent_behavior}
-
-## 语言规则
-{locale_instr}
-canonical 名称/标签必须保持小说原语言。
-
-## 输出要求（JSON）
-{{
-  "answer": "（必填）自然语言回答",
-  "cited_evidence_indices": [],
-  "suggestions": []
-}}
-
-## 规则
-1. 当前轮次不要主动生成 suggestions
-2. 不要假装自己看到了大量章节证据；若用户后续提出具体任务，再进入检索/研究模式
-3. 回答里要体现你知道当前处在哪个工作台，以及你现在能帮什么
-""",
-            f"""You are a novel world-model workbench assistant (Copilot).
-
-## Current task
-{runtime_instr}
-
-## Current workbench context
-{workbench_context}
-
-## Behavior for this turn
-{intent_behavior}
-
-## Language rules
-{locale_instr}
-Canonical names and labels must remain in the novel's original language.
-
-## Output format (JSON)
-{{
-  "answer": "Natural-language answer (required)",
-  "cited_evidence_indices": [],
-  "suggestions": []
-}}
-
-## Rules
-1. Do not proactively generate suggestions in this turn
-2. Do not pretend you have already seen large amounts of chapter evidence; wait for a concrete task before entering retrieval or research mode
-3. Make it clear that you know which workspace you are in and what you can help with right now
-""",
+            "workbench_assistant",
+            runtime_instr=runtime_instr,
+            workbench_context=workbench_context,
+            intent_behavior=intent_behavior,
+            locale_instr=locale_instr,
         )
 
-    return choose_locale_text(
+    return _prompt_template(
         interaction_locale,
-        f"""你是一个小说世界模型研究助手（Copilot）。
-
-## 当前任务
-{runtime_instr}
-
-## 当前工作台上下文
-{workbench_context}
-
-## 当前轮次行为要求
-{intent_behavior}
-
-## 语言规则
-{locale_instr}
-canonical 名称/标签必须保持小说原语言。
-
-## 世界模型
-{world_model_text}
-
-## 后端已检索的证据
-以下证据由后端从章节和世界模型中检索。你只能引用这些证据，不能编造新证据。
-{evidence_text}
-
-## 输出要求（JSON）
-{{
-  "answer": "（必填）自然语言分析/回答",
-  "cited_evidence_indices": [0, 1],
-  "suggestions": [
-    {{
-      "kind": "update_entity | create_entity | update_relationship | create_relationship | update_system | create_system",
-      "title": "建议标题",
-      "summary": "一句话说明",
-      "cited_evidence_indices": [0],
-      "target_resource": "entity | relationship | system",
-      "target_id": "整数ID（update 类必填；create 类为 null）",
-      "delta": {{
-        "name": "（可选）",
-        "entity_type": "（可选）",
-        "description": "（可选）",
-        "aliases": ["（可选）"],
-        "label": "（可选，relationship）",
-        "source_id": "（可选，relationship create）",
-        "target_id": "（可选，relationship create）",
-        "source_name": "（可选，relationship create；当关系涉及新实体时填写名称）",
-        "target_name": "（可选，relationship create；当关系涉及新实体时填写名称）",
-        "source_entity_type": "（可选，relationship create；当 source_name 是新实体时填写类型）",
-        "target_entity_type": "（可选，relationship create；当 target_name 是新实体时填写类型）",
-        "constraints": ["（可选，system）"],
-        "display_type": "（可选，system）",
-        "attributes": [
-          {{"key": "属性名", "surface": "可见值"}}
-        ]
-      }}
-    }}
-  ]
-}}
-
-## 规则
-1. cited_evidence_indices 必须引用 [Evidence#N] 的索引，不能编造证据
-2. suggestions 只在有充分证据时才生成；没有 suggestions 是正常结果
-3. target_id 必须引用上面的 [Entity#ID] / [Rel#ID] / [System#ID]
-4. delta 中只包含需要修改/新增的字段
-5. 不要建议删除、合并或拆分操作
-6. attributes 数组用于建议新增或更新实体属性（key-value对）
-7. 如果 create_relationship 涉及尚未存在的新实体，必须同时生成对应的 create_entity 建议，并在关系 delta 里填写 source_name / target_name
-8. 实体不只包括人物，也包括势力、组织、地点、物件、概念、规则等；不要把所有新实体默认写成人物
-""",
-        f"""You are a novel world-model research assistant (Copilot).
-
-## Current task
-{runtime_instr}
-
-## Current workbench context
-{workbench_context}
-
-## Behavior for this turn
-{intent_behavior}
-
-## Language rules
-{locale_instr}
-Canonical names and labels must remain in the novel's original language.
-
-## World model
-{world_model_text}
-
-## Evidence retrieved by the backend
-The evidence below was retrieved from chapters and the world model by the backend. You may only cite this evidence and must not invent new evidence.
-{evidence_text}
-
-## Output format (JSON)
-{{
-  "answer": "Natural-language analysis or answer (required)",
-  "cited_evidence_indices": [0, 1],
-  "suggestions": [
-    {{
-      "kind": "update_entity | create_entity | update_relationship | create_relationship | update_system | create_system",
-      "title": "Suggestion title",
-      "summary": "One-sentence explanation",
-      "cited_evidence_indices": [0],
-      "target_resource": "entity | relationship | system",
-      "target_id": "Integer ID (required for update kinds; null for create kinds)",
-      "delta": {{
-        "name": "(optional)",
-        "entity_type": "(optional)",
-        "description": "(optional)",
-        "aliases": ["(optional)"],
-        "label": "(optional, relationship)",
-        "source_id": "(optional, relationship create)",
-        "target_id": "(optional, relationship create)",
-        "source_name": "(optional, relationship create; required when the relationship refers to a new entity)",
-        "target_name": "(optional, relationship create; required when the relationship refers to a new entity)",
-        "source_entity_type": "(optional, relationship create; required when source_name is a new entity)",
-        "target_entity_type": "(optional, relationship create; required when target_name is a new entity)",
-        "constraints": ["(optional, system)"],
-        "display_type": "(optional, system)",
-        "attributes": [
-          {{"key": "Attribute name", "surface": "Visible value"}}
-        ]
-      }}
-    }}
-  ]
-}}
-
-## Rules
-1. cited_evidence_indices must reference [Evidence#N] entries that actually exist
-2. Generate suggestions only when evidence is sufficient; no suggestions is a normal outcome
-3. target_id values must reference the [Entity#ID] / [Rel#ID] / [System#ID] entries above
-4. delta must include only fields that need to be added or changed
-5. Do not suggest delete, merge, or split operations
-6. The attributes array is only for proposing added or updated entity attributes (key-value pairs)
-7. If create_relationship introduces a not-yet-existing entity, you must also emit the matching create_entity suggestion and fill source_name / target_name in the relationship delta
-8. Entities are not limited to people; they can also be factions, organizations, locations, objects, concepts, and rules. Do not default every new entity to Character
-""",
+        "research_assistant",
+        runtime_instr=runtime_instr,
+        workbench_context=workbench_context,
+        intent_behavior=intent_behavior,
+        locale_instr=locale_instr,
+        world_model_text=world_model_text,
+        evidence_text=evidence_text,
     )
 
 
@@ -963,7 +1217,7 @@ def build_auto_preload(snapshot: ScopeSnapshot, interaction_locale: str = "zh") 
         focus_entity = snapshot.entities_by_id.get(snapshot.focus_entity_id or -1)
         entity_names = [
             f"{entity.name}({entity.entity_type})"
-            + (choose_locale_text(interaction_locale, " [草稿]", " [draft]") if entity.status == "draft" else "")
+            + (_prompt_text(interaction_locale, "entity_draft_tag") if entity.status == "draft" else "")
             for entity in snapshot.entities[:12]
         ]
         relationship_lines: list[str] = []
@@ -975,70 +1229,56 @@ def build_auto_preload(snapshot: ScopeSnapshot, interaction_locale: str = "zh") 
             )
 
         parts = [
-            choose_locale_text(
+            _prompt_text(
                 interaction_locale,
-                f"已加载聚焦研究上下文：{len(snapshot.entities)} 个实体，{len(snapshot.relationships)} 条关系，{len(snapshot.systems)} 个体系被自动预载。",
-                f"Loaded focused-research context: {len(snapshot.entities)} entities, {len(snapshot.relationships)} relationships, and {len(snapshot.systems)} systems were auto-preloaded.",
+                "focused_context_loaded",
+                entity_count=len(snapshot.entities),
+                relationship_count=len(snapshot.relationships),
+                system_count=len(snapshot.systems),
             ),
         ]
         if focus_entity:
             parts.append(
-                choose_locale_text(
+                _prompt_text(
                     interaction_locale,
-                    f"当前焦点实体：[Entity#{focus_entity.id}] {focus_entity.name} ({focus_entity.entity_type})",
-                    f"Current focus entity: [Entity#{focus_entity.id}] {focus_entity.name} ({focus_entity.entity_type})",
+                    "focused_current_entity",
+                    entity_id=focus_entity.id,
+                    entity_name=focus_entity.name,
+                    entity_type=focus_entity.entity_type,
                 )
             )
             attrs = snapshot.attributes_by_entity.get(focus_entity.id, [])
             if attrs:
                 parts.append(
-                    choose_locale_text(interaction_locale, "焦点属性：", "Focus attributes: ")
+                    _prompt_text(interaction_locale, "focus_attributes_label")
                     + "; ".join(f"{attr.key}={attr.surface[:80]}" for attr in attrs[:6])
                 )
         if entity_names:
             parts.append(
-                choose_locale_text(
-                    interaction_locale,
-                    f"已加载实体：{', '.join(entity_names)}",
-                    f"Loaded entities: {', '.join(entity_names)}",
-                )
+                _prompt_text(interaction_locale, "loaded_entities", entities=", ".join(entity_names))
             )
         if relationship_lines:
-            parts.append(choose_locale_text(interaction_locale, "直接关系：\n", "Direct relationships:\n") + "\n".join(relationship_lines))
-        parts.append(
-            choose_locale_text(
-                interaction_locale,
-                "这个 profile 不会自动塞入全局体系和远距离实体；如需扩展，请按需调用工具。",
-                "This profile does not auto-load global systems or distant entities. Use tools if you need to expand further.",
-            )
-        )
+            parts.append(_prompt_text(interaction_locale, "direct_relationships_label") + "\n".join(relationship_lines))
+        parts.append(_prompt_text(interaction_locale, "focused_expand_hint"))
         return "\n".join(parts)
 
     if snapshot.profile == "draft_governance":
         parts = [
-            choose_locale_text(
+            _prompt_text(
                 interaction_locale,
-                "已加载草稿治理工作集："
-                f"{len(snapshot.draft_entities)} 个草稿实体，"
-                f"{len(snapshot.draft_relationships)} 条草稿关系，"
-                f"{len(snapshot.draft_systems)} 个草稿体系。",
-                "Loaded draft-governance workset: "
-                f"{len(snapshot.draft_entities)} draft entities, "
-                f"{len(snapshot.draft_relationships)} draft relationships, "
-                f"and {len(snapshot.draft_systems)} draft systems.",
+                "draft_governance_loaded",
+                entity_count=len(snapshot.draft_entities),
+                relationship_count=len(snapshot.draft_relationships),
+                system_count=len(snapshot.draft_systems),
             ),
         ]
         if snapshot.draft_entities:
             draft_lines = []
             for entity in snapshot.draft_entities[:12]:
                 desc = (entity.description or "").strip()
-                desc_note = f" — {desc[:80]}" if desc else choose_locale_text(
-                    interaction_locale,
-                    " — (无描述)",
-                    " — (No description)",
-                )
+                desc_note = f" — {desc[:80]}" if desc else _prompt_text(interaction_locale, "draft_no_description_suffix")
                 draft_lines.append(f"  [Entity#{entity.id}] {entity.name} ({entity.entity_type}){desc_note}")
-            parts.append(choose_locale_text(interaction_locale, "Draft 实体:\n", "Draft entities:\n") + "\n".join(draft_lines))
+            parts.append(_prompt_text(interaction_locale, "section_draft_entities") + "\n".join(draft_lines))
         if snapshot.draft_relationships:
             draft_relationships = []
             for relationship in snapshot.draft_relationships[:10]:
@@ -1047,22 +1287,16 @@ def build_auto_preload(snapshot: ScopeSnapshot, interaction_locale: str = "zh") 
                 draft_relationships.append(
                     f"  [Rel#{relationship.id}] {src.name if src else '?'} --[{relationship.label}]--> {tgt.name if tgt else '?'}"
                 )
-            parts.append(choose_locale_text(interaction_locale, "Draft 关系:\n", "Draft relationships:\n") + "\n".join(draft_relationships))
+            parts.append(_prompt_text(interaction_locale, "section_draft_relationships") + "\n".join(draft_relationships))
         if snapshot.draft_systems:
             draft_systems = [f"  [System#{system.id}] {system.name}" for system in snapshot.draft_systems[:10]]
-            parts.append(choose_locale_text(interaction_locale, "Draft 体系:\n", "Draft systems:\n") + "\n".join(draft_systems))
-        parts.append(
-            choose_locale_text(
-                interaction_locale,
-                "这里只有在草稿关系需要端点标签时才会额外带入 confirmed 行；请把注意力保持在草稿工作集内。",
-                "Confirmed rows are only brought in here when a draft relationship needs endpoint labels. Keep your attention inside the draft workset.",
-            )
-        )
+            parts.append(_prompt_text(interaction_locale, "section_draft_systems") + "\n".join(draft_systems))
+        parts.append(_prompt_text(interaction_locale, "draft_confirmed_rows_hint"))
         return "\n".join(parts)
 
     entity_names = [
         f"{entity.name}({entity.entity_type})"
-        + (choose_locale_text(interaction_locale, " [草稿]", " [draft]") if entity.status == "draft" else "")
+        + (_prompt_text(interaction_locale, "entity_draft_tag") if entity.status == "draft" else "")
         for entity in snapshot.entities[:30]
     ]
     relationship_summaries = []
@@ -1073,51 +1307,30 @@ def build_auto_preload(snapshot: ScopeSnapshot, interaction_locale: str = "zh") 
     system_names = [system.name for system in snapshot.systems]
     draft_count = len(snapshot.draft_entities) + len(snapshot.draft_relationships) + len(snapshot.draft_systems)
     parts = [
-        choose_locale_text(
+        _prompt_text(
             interaction_locale,
-            f"已加载全书概览（薄上下文）：{len(snapshot.entities)} 个实体，{len(snapshot.relationships)} 条关系，{len(snapshot.systems)} 个体系，{draft_count} 个草稿。",
-            f"Loaded whole-book overview (thin context): {len(snapshot.entities)} entities, {len(snapshot.relationships)} relationships, {len(snapshot.systems)} systems, and {draft_count} draft rows.",
+            "whole_book_overview_loaded",
+            entity_count=len(snapshot.entities),
+            relationship_count=len(snapshot.relationships),
+            system_count=len(snapshot.systems),
+            draft_count=draft_count,
         ),
     ]
     if entity_names:
         parts.append(
-            choose_locale_text(
-                interaction_locale,
-                f"实体示例：{', '.join(entity_names[:12])}",
-                f"Entity examples: {', '.join(entity_names[:12])}",
-            )
+            _prompt_text(interaction_locale, "whole_book_entity_examples", samples=", ".join(entity_names[:12]))
         )
     if relationship_summaries:
         parts.append(
-            choose_locale_text(
-                interaction_locale,
-                f"关系示例：{'; '.join(relationship_summaries[:8])}",
-                f"Relationship examples: {'; '.join(relationship_summaries[:8])}",
-            )
+            _prompt_text(interaction_locale, "whole_book_relationship_examples", samples="; ".join(relationship_summaries[:8]))
         )
     if system_names:
         parts.append(
-            choose_locale_text(
-                interaction_locale,
-                f"体系示例：{', '.join(system_names[:8])}",
-                f"System examples: {', '.join(system_names[:8])}",
-            )
+            _prompt_text(interaction_locale, "whole_book_system_examples", samples=", ".join(system_names[:8]))
         )
     if draft_count:
-        parts.append(
-            choose_locale_text(
-                interaction_locale,
-                "如需草稿细节，请切到草稿治理或用工具检查具体条目。",
-                "If you need draft details, switch to draft governance or inspect specific rows with tools.",
-            )
-        )
-    parts.append(
-        choose_locale_text(
-            interaction_locale,
-            "这个 profile 故意只做薄加载，请按需检索或展开证据。",
-            "This profile intentionally stays thin; retrieve or expand evidence on demand.",
-        )
-    )
+        parts.append(_prompt_text(interaction_locale, "whole_book_draft_detail_hint"))
+    parts.append(_prompt_text(interaction_locale, "whole_book_thin_hint"))
     return "\n".join(parts)
 
 
@@ -1135,175 +1348,31 @@ def build_tool_loop_system_prompt(
     intent_behavior = _build_intent_behavior_text(turn_intent, interaction_locale)
 
     if interaction_locale and interaction_locale != novel_lang:
-        locale_instr = choose_locale_text(
+        locale_instr = _prompt_text(
             interaction_locale,
-            f"用户交互语言是 {interaction_locale}，请用该语言回答。"
-            f"但所有 canonical 名称、标签和证据引用必须保持小说原语言（{novel_lang}）。",
-            f"The user's interaction language is {interaction_locale}. Respond in that language, "
-            f"but keep all canonical names, labels, and evidence references in the novel's original language ({novel_lang}).",
+            "language_interaction_rule",
+            interaction_locale=interaction_locale,
+            novel_lang=novel_lang,
         )
     else:
-        locale_instr = choose_locale_text(
-            interaction_locale,
-            f"请用小说语言（{novel_lang}）回答。",
-            f"Respond in the novel's language ({novel_lang}).",
-        )
+        locale_instr = _prompt_text(interaction_locale, "language_novel_rule", novel_lang=novel_lang)
 
     if should_preload_world_context(turn_intent):
-        workflow_hint = choose_locale_text(
+        workflow_hint = _prompt_map(
             interaction_locale,
-            _FOCUS_WORKFLOW_HINTS_ZH.get(snapshot.focus_variant, _FOCUS_WORKFLOW_HINTS_ZH["entity"]),
-            _FOCUS_WORKFLOW_HINTS_EN.get(snapshot.focus_variant, _FOCUS_WORKFLOW_HINTS_EN["entity"]),
+            "focus_workflow_hints",
+            snapshot.focus_variant or "entity",
+            fallback_key="entity",
         )
     else:
-        workflow_hint = choose_locale_text(
-            interaction_locale,
-            "1. 先根据当前工作台上下文自然接话\n"
-            "2. 简短说明你知道自己在哪个界面、现在能帮什么\n"
-            "3. 这一轮默认不要主动调用工具，也不要主动生成 suggestions\n"
-            "4. 若用户继续提出明确任务，再转入研究/检索模式",
-            "1. Start by replying naturally from the current workbench context\n"
-            "2. Briefly show that you know which workspace you are in and what you can help with\n"
-            "3. Do not proactively call tools or generate suggestions in this turn\n"
-            "4. If the user follows up with a concrete task, then switch into retrieval or research mode",
-        )
+        workflow_hint = _prompt_text(interaction_locale, "workflow_hint_light")
 
-    return choose_locale_text(
+    return _prompt_template(
         interaction_locale,
-        f"""你是一个小说世界模型研究助手（Copilot）。你可以使用工具来检索证据。
-
-## 当前任务
-{runtime_instr}
-
-## 当前工作台上下文
-{workbench_context}
-
-## 当前轮次行为要求
-{intent_behavior}
-
-## 语言规则
-{locale_instr}
-canonical 名称/标签必须保持小说原语言。
-
-## 工具
-- load_scope_snapshot(): 重新加载世界模型状态（一般不需要，已自动加载）
-- find(query, scope?): 搜索证据。scope 可选: "story_text"（正文片段）、"world_rows"（实体/关系/体系）、"drafts"（草稿质量审查）、"all"（默认）
-- open(pack_id): 展开某个证据包的完整内容
-- read(target_refs): 读取实体/关系/体系的当前状态。参数: [{{"type": "entity"|"relationship"|"system", "id": 整数}}]
-
-## 建议工作流程
-{workflow_hint}
-
-## 最终回答格式（JSON）
-{{
-  "answer": "（必填）自然语言分析/回答",
-  "cited_evidence_indices": [],
-  "suggestions": [
-    {{
-      "kind": "update_entity | create_entity | update_relationship | create_relationship | update_system | create_system",
-      "title": "建议标题",
-      "summary": "一句话说明",
-      "cited_evidence_indices": [],
-      "target_resource": "entity | relationship | system",
-      "target_id": "整数ID（update 类必填；create 类为 null）",
-      "delta": {{
-        "name": "（可选）",
-        "entity_type": "（可选）",
-        "description": "（可选）",
-        "aliases": ["（可选）"],
-        "label": "（可选，relationship）",
-        "source_id": "（可选，relationship create）",
-        "target_id": "（可选，relationship create）",
-        "source_name": "（可选，relationship create；当关系涉及新实体时填写名称）",
-        "target_name": "（可选，relationship create；当关系涉及新实体时填写名称）",
-        "source_entity_type": "（可选，relationship create；当 source_name 是新实体时填写类型）",
-        "target_entity_type": "（可选，relationship create；当 target_name 是新实体时填写类型）",
-        "constraints": ["（可选，system）"],
-        "display_type": "（可选，system）",
-        "attributes": [
-          {{"key": "属性名", "surface": "可见值"}}
-        ]
-      }}
-    }}
-  ]
-}}
-
-## 规则
-1. 只能基于工具返回的证据提出建议，不能编造
-2. 没有 suggestions 也是正常结果；若当前轮次是闲聊/能力询问，应默认返回空 suggestions
-3. target_id 必须引用已知的实体/关系/体系 ID
-4. delta 中只包含需要修改/新增的字段
-5. 不要建议删除、合并或拆分
-6. attributes 数组用于建议新增或更新实体属性（key-value对）
-7. 如果 create_relationship 涉及尚未存在的新实体，必须同时生成对应的 create_entity 建议，并在关系 delta 里填写 source_name / target_name
-8. 实体不只包括人物，也包括势力、组织、地点、物件、概念、规则等；不要把所有新实体默认写成人物
-""",
-        f"""You are a novel world-model research assistant (Copilot). You may use tools to retrieve evidence.
-
-## Current task
-{runtime_instr}
-
-## Current workbench context
-{workbench_context}
-
-## Behavior for this turn
-{intent_behavior}
-
-## Language rules
-{locale_instr}
-Canonical names and labels must remain in the novel's original language.
-
-## Tools
-- load_scope_snapshot(): Reload world-model state (entities, relationships, systems, drafts). Usually unnecessary because it is already loaded.
-- find(query, scope?): Search evidence. Optional scope values: "story_text" (chapter excerpts), "world_rows" (entities / relationships / systems), "drafts" (draft-quality review), "all" (default)
-- open(pack_id): Expand the full contents of an evidence pack
-- read(target_refs): Read the current live state of entities / relationships / systems. Argument shape: [{{"type": "entity"|"relationship"|"system", "id": integer}}]
-
-## Suggested workflow
-{workflow_hint}
-
-## Final answer format (JSON)
-{{
-  "answer": "Natural-language analysis or answer (required)",
-  "cited_evidence_indices": [],
-  "suggestions": [
-    {{
-      "kind": "update_entity | create_entity | update_relationship | create_relationship | update_system | create_system",
-      "title": "Suggestion title",
-      "summary": "One-sentence explanation",
-      "cited_evidence_indices": [],
-      "target_resource": "entity | relationship | system",
-      "target_id": "Integer ID (required for update kinds; null for create kinds)",
-      "delta": {{
-        "name": "(optional)",
-        "entity_type": "(optional)",
-        "description": "(optional)",
-        "aliases": ["(optional)"],
-        "label": "(optional, relationship)",
-        "source_id": "(optional, relationship create)",
-        "target_id": "(optional, relationship create)",
-        "source_name": "(optional, relationship create; required when the relationship refers to a new entity)",
-        "target_name": "(optional, relationship create; required when the relationship refers to a new entity)",
-        "source_entity_type": "(optional, relationship create; required when source_name is a new entity)",
-        "target_entity_type": "(optional, relationship create; required when target_name is a new entity)",
-        "constraints": ["(optional, system)"],
-        "display_type": "(optional, system)",
-        "attributes": [
-          {{"key": "Attribute name", "surface": "Visible value"}}
-        ]
-      }}
-    }}
-  ]
-}}
-
-## Rules
-1. You may only propose suggestions based on evidence returned by tools
-2. No suggestions is a normal result. For small talk or capability questions, default to an empty suggestions array
-3. target_id values must reference known entity / relationship / system IDs
-4. delta must include only fields that need to be added or changed
-5. Do not suggest delete, merge, or split operations
-6. The attributes array is only for proposing added or updated entity attributes (key-value pairs)
-7. If create_relationship introduces a not-yet-existing entity, you must also emit the matching create_entity suggestion and fill source_name / target_name in the relationship delta
-8. Entities are not limited to people; they can also be factions, organizations, locations, objects, concepts, and rules. Do not default every new entity to Character
-""",
+        "tool_loop",
+        runtime_instr=runtime_instr,
+        workbench_context=workbench_context,
+        intent_behavior=intent_behavior,
+        locale_instr=locale_instr,
+        workflow_hint=workflow_hint,
     )

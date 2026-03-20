@@ -19,7 +19,7 @@ from app.core.indexing import (
     WindowIndexLifecycleSnapshot,
     inspect_window_index_lifecycle,
 )
-from app.core.copilot.i18n import choose_locale_text
+from app.core.copilot.messages import CopilotTextKey, get_copilot_text
 from app.models import (
     Chapter,
     Novel,
@@ -39,6 +39,25 @@ MAX_SCOPE_ENTITIES = 80
 MAX_SCOPE_RELATIONSHIPS = 60
 MAX_SCOPE_SYSTEMS = 30
 MAX_CHAPTER_EXCERPT_CHARS = 2000
+
+
+def _scope_text(
+    interaction_locale: str,
+    text_key: CopilotTextKey,
+    **params: object,
+) -> str:
+    return get_copilot_text(text_key, locale=interaction_locale, **params)
+
+
+def _append_scope_labeled_line(
+    text: str,
+    *,
+    interaction_locale: str,
+    label_key: CopilotTextKey,
+    value: str,
+) -> str:
+    label = _scope_text(interaction_locale, label_key)
+    return f"{text}\n{label}: {value}"
 
 
 @dataclass
@@ -385,45 +404,31 @@ def _gather_chapter_evidence(
                                     "start_pos": start,
                                     "end_pos": end,
                                 },
-                                title=choose_locale_text(
+                                title=_scope_text(
                                     interaction_locale,
-                                    f"第{chapter.chapter_number}章 · 位置{start}-{end}",
-                                    f"Chapter {chapter.chapter_number} · Position {start}-{end}",
+                                    CopilotTextKey.SCOPE_CHAPTER_WINDOW_TITLE,
+                                    chapter_number=chapter.chapter_number,
+                                    start=start,
+                                    end=end,
                                 ),
                                 excerpt=text[:MAX_CHAPTER_EXCERPT_CHARS],
-                                why_relevant=choose_locale_text(
+                                why_relevant=_scope_text(
                                     interaction_locale,
-                                    f"包含对「{entity.name}」的提及",
-                                    f'Mentions "{entity.name}"',
+                                    CopilotTextKey.SCOPE_CHAPTER_MENTIONS_ENTITY,
+                                    entity_name=entity.name,
                                 ),
                             ))
             except Exception:
                 logger.debug("Window index load failed, falling back to tail chapters", exc_info=True)
 
     if len(items) < 3 and snapshot.focus_variant != "whole_book":
-        fallback_reason = choose_locale_text(
-            interaction_locale,
-            "最近章节上下文",
-            "Recent chapter context",
-        )
+        fallback_reason = _scope_text(interaction_locale, CopilotTextKey.SCOPE_RECENT_CHAPTER_CONTEXT)
         if lifecycle and lifecycle.status == WINDOW_INDEX_STATUS_STALE:
-            fallback_reason = choose_locale_text(
-                interaction_locale,
-                "章节有更新，先回退到最近章节上下文",
-                "The chapters changed, so the run is temporarily falling back to recent chapter context",
-            )
+            fallback_reason = _scope_text(interaction_locale, CopilotTextKey.SCOPE_STALE_RECENT_CHAPTER_CONTEXT)
         elif lifecycle and lifecycle.status == WINDOW_INDEX_STATUS_MISSING:
-            fallback_reason = choose_locale_text(
-                interaction_locale,
-                "全书内容还在准备中，先回退到最近章节上下文",
-                "Whole-book content is still being prepared, so the run is temporarily falling back to recent chapter context",
-            )
+            fallback_reason = _scope_text(interaction_locale, CopilotTextKey.SCOPE_MISSING_RECENT_CHAPTER_CONTEXT)
         elif lifecycle and lifecycle.status == WINDOW_INDEX_STATUS_FAILED:
-            fallback_reason = choose_locale_text(
-                interaction_locale,
-                "全书内容整理失败，先回退到最近章节上下文",
-                "Whole-book content failed to organize, so the run is temporarily falling back to recent chapter context",
-            )
+            fallback_reason = _scope_text(interaction_locale, CopilotTextKey.SCOPE_FAILED_RECENT_CHAPTER_CONTEXT)
         chapters = (
             db.query(Chapter)
             .filter(Chapter.novel_id == novel.id)
@@ -449,10 +454,10 @@ def _gather_chapter_evidence(
                     "start_pos": max(0, len(chapter.content) - MAX_CHAPTER_EXCERPT_CHARS),
                     "end_pos": len(chapter.content),
                 },
-                title=choose_locale_text(
+                title=_scope_text(
                     interaction_locale,
-                    f"第{chapter.chapter_number}章 · 尾部",
-                    f"Chapter {chapter.chapter_number} · Tail",
+                    CopilotTextKey.SCOPE_CHAPTER_TAIL_TITLE,
+                    chapter_number=chapter.chapter_number,
                 ),
                 excerpt=text[:MAX_CHAPTER_EXCERPT_CHARS],
                 why_relevant=fallback_reason,
@@ -470,19 +475,31 @@ def _gather_entity_evidence(
     if target_id:
         entity = snapshot.entities_by_id.get(target_id)
         if entity:
-            desc = entity.description[:500] if entity.description else choose_locale_text(interaction_locale, "(无描述)", "(No description)")
+            desc = entity.description[:500] if entity.description else _scope_text(
+                interaction_locale,
+                CopilotTextKey.TEXT_NO_DESCRIPTION,
+            )
             attrs = snapshot.attributes_by_entity.get(entity.id, [])
             attr_text = "; ".join(f"{attr.key}={attr.surface[:80]}" for attr in attrs[:5])
             excerpt = f"{entity.name} ({entity.entity_type}): {desc}"
             if attr_text:
-                excerpt += choose_locale_text(interaction_locale, f"\n属性: {attr_text}", f"\nAttributes: {attr_text}")
+                excerpt = _append_scope_labeled_line(
+                    excerpt,
+                    interaction_locale=interaction_locale,
+                    label_key=CopilotTextKey.TEXT_ATTRIBUTES_LABEL,
+                    value=attr_text,
+                )
             items.append(EvidenceItem(
                 evidence_id=f"ent_{entity.id}",
                 source_type="world_entity",
                 source_ref={"entity_id": entity.id},
-                title=choose_locale_text(interaction_locale, f"实体 · {entity.name}", f"Entity · {entity.name}"),
+                title=_scope_text(
+                    interaction_locale,
+                    CopilotTextKey.SCOPE_ENTITY_TITLE,
+                    entity_name=entity.name,
+                ),
                 excerpt=excerpt,
-                why_relevant=choose_locale_text(interaction_locale, "当前研究目标实体", "Current research target entity"),
+                why_relevant=_scope_text(interaction_locale, CopilotTextKey.SCOPE_ENTITY_TARGET_REASON),
             ))
 
 
@@ -512,12 +529,15 @@ def _gather_relationship_evidence(
                     "target_id": relationship.target_id,
                 },
                 title=f"{source_name} --[{relationship.label}]--> {target_name}",
-                excerpt=choose_locale_text(
+                excerpt=_scope_text(
                     interaction_locale,
-                    f"关系: {source_name} → {relationship.label} → {target_name}. {description}",
-                    f"Relationship: {source_name} → {relationship.label} → {target_name}. {description}",
+                    CopilotTextKey.SCOPE_RELATIONSHIP_EXCERPT,
+                    source_name=source_name,
+                    label=relationship.label,
+                    target_name=target_name,
+                    description=description,
                 ),
-                why_relevant=choose_locale_text(interaction_locale, "与目标实体相关的已知关系", "Known relationships connected to the target entity"),
+                why_relevant=_scope_text(interaction_locale, CopilotTextKey.SCOPE_RELATIONSHIP_TARGET_REASON),
             ))
 
 
@@ -526,38 +546,70 @@ def _gather_draft_row_evidence(snapshot: ScopeSnapshot, items: list[EvidenceItem
     for entity in snapshot.draft_entities[:6]:
         attrs = snapshot.attributes_by_entity.get(entity.id, [])
         attr_text = "; ".join(f"{attr.key}={attr.surface[:60]}" for attr in attrs[:4])
-        excerpt = choose_locale_text(
+        excerpt = _scope_text(
             interaction_locale,
-            f"[草稿实体] {entity.name} ({entity.entity_type})",
-            f"[Draft entity] {entity.name} ({entity.entity_type})",
+            CopilotTextKey.SCOPE_DRAFT_ENTITY_EXCERPT,
+            entity_name=entity.name,
+            entity_type=entity.entity_type,
         )
         if entity.description:
-            excerpt += choose_locale_text(interaction_locale, f"\n描述: {entity.description[:200]}", f"\nDescription: {entity.description[:200]}")
+            excerpt = _append_scope_labeled_line(
+                excerpt,
+                interaction_locale=interaction_locale,
+                label_key=CopilotTextKey.TEXT_DESCRIPTION_LABEL,
+                value=entity.description[:200],
+            )
         else:
-            excerpt += choose_locale_text(interaction_locale, "\n描述: (无描述)", "\nDescription: (No description)")
+            excerpt = _append_scope_labeled_line(
+                excerpt,
+                interaction_locale=interaction_locale,
+                label_key=CopilotTextKey.TEXT_DESCRIPTION_LABEL,
+                value=_scope_text(interaction_locale, CopilotTextKey.TEXT_NO_DESCRIPTION),
+            )
         if attr_text:
-            excerpt += choose_locale_text(interaction_locale, f"\n属性: {attr_text}", f"\nAttributes: {attr_text}")
+            excerpt = _append_scope_labeled_line(
+                excerpt,
+                interaction_locale=interaction_locale,
+                label_key=CopilotTextKey.TEXT_ATTRIBUTES_LABEL,
+                value=attr_text,
+            )
         items.append(EvidenceItem(
             evidence_id=f"draft_ent_{entity.id}",
             source_type="world_entity",
             source_ref={"entity_id": entity.id},
-            title=choose_locale_text(interaction_locale, f"草稿实体 · {entity.name}", f"Draft entity · {entity.name}"),
+            title=_scope_text(
+                interaction_locale,
+                CopilotTextKey.SCOPE_DRAFT_ENTITY_TITLE,
+                entity_name=entity.name,
+            ),
             excerpt=excerpt,
-            why_relevant=choose_locale_text(interaction_locale, "当前草稿工作集中的实体", "Entity from the current draft workset"),
+            why_relevant=_scope_text(interaction_locale, CopilotTextKey.SCOPE_DRAFT_ENTITY_REASON),
         ))
 
     for relationship in snapshot.draft_relationships[:6]:
         source = snapshot.entities_by_id.get(relationship.source_id)
         target = snapshot.entities_by_id.get(relationship.target_id)
-        excerpt = choose_locale_text(
+        excerpt = _scope_text(
             interaction_locale,
-            f"[草稿关系] {source.name if source else '?'} --[{relationship.label}]--> {target.name if target else '?'}",
-            f"[Draft relationship] {source.name if source else '?'} --[{relationship.label}]--> {target.name if target else '?'}",
+            CopilotTextKey.SCOPE_DRAFT_RELATIONSHIP_EXCERPT,
+            source_name=source.name if source else "?",
+            label=relationship.label,
+            target_name=target.name if target else "?",
         )
         if relationship.description:
-            excerpt += choose_locale_text(interaction_locale, f"\n描述: {relationship.description[:200]}", f"\nDescription: {relationship.description[:200]}")
+            excerpt = _append_scope_labeled_line(
+                excerpt,
+                interaction_locale=interaction_locale,
+                label_key=CopilotTextKey.TEXT_DESCRIPTION_LABEL,
+                value=relationship.description[:200],
+            )
         else:
-            excerpt += choose_locale_text(interaction_locale, "\n描述: (无描述)", "\nDescription: (No description)")
+            excerpt = _append_scope_labeled_line(
+                excerpt,
+                interaction_locale=interaction_locale,
+                label_key=CopilotTextKey.TEXT_DESCRIPTION_LABEL,
+                value=_scope_text(interaction_locale, CopilotTextKey.TEXT_NO_DESCRIPTION),
+            )
         items.append(EvidenceItem(
             evidence_id=f"draft_rel_{relationship.id}",
             source_type="world_relationship",
@@ -566,26 +618,39 @@ def _gather_draft_row_evidence(snapshot: ScopeSnapshot, items: list[EvidenceItem
                 "source_id": relationship.source_id,
                 "target_id": relationship.target_id,
             },
-            title=choose_locale_text(interaction_locale, f"草稿关系 · {relationship.label}", f"Draft relationship · {relationship.label}"),
+            title=_scope_text(
+                interaction_locale,
+                CopilotTextKey.SCOPE_DRAFT_RELATIONSHIP_TITLE,
+                label=relationship.label,
+            ),
             excerpt=excerpt,
-            why_relevant=choose_locale_text(interaction_locale, "当前草稿工作集中的关系", "Relationship from the current draft workset"),
+            why_relevant=_scope_text(interaction_locale, CopilotTextKey.SCOPE_DRAFT_RELATIONSHIP_REASON),
         ))
 
     for system in snapshot.draft_systems[:4]:
-        excerpt = choose_locale_text(
+        excerpt = _scope_text(
             interaction_locale,
-            f"[草稿体系] {system.name}",
-            f"[Draft system] {system.name}",
+            CopilotTextKey.SCOPE_DRAFT_SYSTEM_EXCERPT,
+            system_name=system.name,
         )
         if system.description:
-            excerpt += choose_locale_text(interaction_locale, f"\n描述: {system.description[:200]}", f"\nDescription: {system.description[:200]}")
+            excerpt = _append_scope_labeled_line(
+                excerpt,
+                interaction_locale=interaction_locale,
+                label_key=CopilotTextKey.TEXT_DESCRIPTION_LABEL,
+                value=system.description[:200],
+            )
         items.append(EvidenceItem(
             evidence_id=f"draft_sys_{system.id}",
             source_type="world_system",
             source_ref={"system_id": system.id},
-            title=choose_locale_text(interaction_locale, f"草稿体系 · {system.name}", f"Draft system · {system.name}"),
+            title=_scope_text(
+                interaction_locale,
+                CopilotTextKey.SCOPE_DRAFT_SYSTEM_TITLE,
+                system_name=system.name,
+            ),
             excerpt=excerpt,
-            why_relevant=choose_locale_text(interaction_locale, "当前草稿工作集中的体系", "System from the current draft workset"),
+            why_relevant=_scope_text(interaction_locale, CopilotTextKey.SCOPE_DRAFT_SYSTEM_REASON),
         ))
 
 

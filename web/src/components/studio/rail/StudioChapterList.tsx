@@ -1,4 +1,6 @@
+import '@/lib/uiMessagePacks/novel'
 import { FileText, Plus } from 'lucide-react'
+import { useUiLocale } from '@/contexts/UiLocaleContext'
 import { NwButton } from '@/components/ui/nw-button'
 import { cn } from '@/lib/utils'
 import type { NovelShellStage } from '@/components/novel-shell/NovelShellRouteState'
@@ -25,13 +27,14 @@ export function StudioChapterList({
   isCreating?: boolean
   activeStage: NovelShellStage | null
 }) {
+  const { t } = useUiLocale()
   const isChapterStage = activeStage !== 'write'
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" data-testid="studio-rail-chapters">
       <div className="mb-2 flex items-center justify-between px-2">
         <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-          章节
+          {t('studio.rail.chapters')}
         </div>
         {onCreateChapter ? (
           <NwButton
@@ -39,7 +42,7 @@ export function StudioChapterList({
             disabled={isCreating}
             variant="ghost"
             className="h-6 w-6 rounded-md p-0 text-muted-foreground hover:bg-foreground/5"
-            title="新建章节"
+            title={t('studio.rail.createChapter')}
           >
             <Plus size={12} />
           </NwButton>
@@ -48,7 +51,7 @@ export function StudioChapterList({
 
       {chapters.length === 0 ? (
         <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-          暂无章节
+          {t('studio.rail.noChapters')}
         </div>
       ) : (
         <div className="nw-scrollbar-thin min-h-0 flex-1 overflow-y-auto">
@@ -78,7 +81,7 @@ export function StudioChapterList({
       )}
 
       <div className="mt-3 border-t border-[var(--nw-glass-border)] px-2 pt-3 text-xs text-muted-foreground">
-        共 {chapterCount} 章
+        {t('studio.rail.chapterCount', { count: chapterCount })}
       </div>
     </section>
   )

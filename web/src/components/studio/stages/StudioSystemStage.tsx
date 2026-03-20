@@ -1,36 +1,39 @@
 import { type KeyboardEvent } from 'react'
 import { ArrowLeft, Compass } from 'lucide-react'
+import { LABELS } from '@/constants/labels'
+import { useUiLocale } from '@/contexts/UiLocaleContext'
 import { InlineEdit } from '@/components/world-model/shared/InlineEdit'
 import { VisibilityDot } from '@/components/world-model/shared/VisibilityDot'
 import { NwButton } from '@/components/ui/nw-button'
 import { useConfirmSystems, useUpdateSystem, useWorldSystem, useWorldSystems } from '@/hooks/world/useSystems'
+import type { UiMessageKey, UiMessageParams } from '@/lib/uiMessages'
 import { getSystemDisplayTypeLabel, isLegacyGraphDisplayType } from '@/lib/worldSystemDisplay'
 import { cn } from '@/lib/utils'
 import type { WorldSystem } from '@/types/api'
 
-function getSystemStructureSummary(system: WorldSystem) {
+function getSystemStructureSummary(system: WorldSystem, t: (key: UiMessageKey, params?: UiMessageParams) => string) {
   if (isLegacyGraphDisplayType(system.display_type)) {
-    return '旧图谱类型，仅在 Atlas 中提供完整只读查看。'
+    return t('studio.stage.system.summary.legacyGraph')
   }
 
   if (system.display_type === 'hierarchy') {
     const nodes = Array.isArray((system.data as { nodes?: unknown[] }).nodes)
       ? (system.data as { nodes: unknown[] }).nodes.length
       : 0
-    return `层级节点 ${nodes} 个`
+    return t('studio.stage.system.summary.hierarchy', { count: nodes })
   }
 
   if (system.display_type === 'timeline') {
     const events = Array.isArray((system.data as { events?: unknown[] }).events)
       ? (system.data as { events: unknown[] }).events.length
       : 0
-    return `时间节点 ${events} 个`
+    return t('studio.stage.system.summary.timeline', { count: events })
   }
 
   const items = Array.isArray((system.data as { items?: unknown[] }).items)
     ? (system.data as { items: unknown[] }).items.length
     : 0
-  return `列表规则 ${items} 条`
+  return t('studio.stage.system.summary.list', { count: items })
 }
 
 export function StudioSystemStage({
@@ -46,6 +49,7 @@ export function StudioSystemStage({
   onOpenAtlas: () => void
   onReturnToArtifact?: () => void
 }) {
+  const { t } = useUiLocale()
   const { data: systems = [] } = useWorldSystems(novelId)
   const { data: system } = useWorldSystem(novelId, systemId)
   const updateSystem = useUpdateSystem(novelId)
@@ -60,10 +64,10 @@ export function StudioSystemStage({
               Studio
             </div>
             <h2 className="text-lg font-semibold text-foreground">
-              体系检查
+              {t('studio.stage.system.title')}
             </h2>
             <p className="text-sm text-muted-foreground">
-              在写作上下文中检查体系描述与可见性；结构编辑、约束维护和更高密度治理仍留给 Atlas。
+              {t('studio.stage.system.description')}
             </p>
           </div>
 
@@ -75,7 +79,7 @@ export function StudioSystemStage({
                 className="rounded-[10px] px-4 py-2 text-sm font-medium"
               >
                 <ArrowLeft size={14} />
-                返回结果
+                {t('studio.stage.returnToResults')}
               </NwButton>
             ) : null}
             <NwButton
@@ -84,7 +88,7 @@ export function StudioSystemStage({
               className="rounded-[10px] px-4 py-2 text-sm font-medium"
             >
               <Compass size={14} />
-              在 Atlas 中打开
+              {t('studio.stage.openInAtlas')}
             </NwButton>
           </div>
         </div>
@@ -93,16 +97,16 @@ export function StudioSystemStage({
       <div className="flex-1 min-h-0 flex overflow-hidden">
         <div className="w-[280px] shrink-0 border-r border-[var(--nw-glass-border)] bg-[var(--nw-glass-bg)] backdrop-blur-2xl overflow-hidden flex flex-col min-h-0">
           <div className="shrink-0 p-4 space-y-2">
-            <div className="text-sm font-medium text-foreground">世界体系</div>
+            <div className="text-sm font-medium text-foreground">{t('studio.stage.system.sidebarTitle')}</div>
             <div className="text-xs text-muted-foreground">
-              共 {systems.length} 个体系
+              {t('studio.stage.system.count', { count: systems.length })}
             </div>
           </div>
 
           <div className="nw-scrollbar-thin min-h-0 flex-1 overflow-y-auto">
             {systems.length === 0 ? (
               <div className="px-4 py-2 text-sm text-muted-foreground">
-                暂无体系
+                {t('studio.stage.system.empty')}
               </div>
             ) : (
               systems.map((candidate) => {
@@ -130,7 +134,7 @@ export function StudioSystemStage({
                       <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--color-status-draft))] shrink-0" />
                     )}
                     <span className="truncate flex-1 text-foreground">
-                      {candidate.name || '未命名体系'}
+                      {candidate.name || t('studio.stage.system.unnamed')}
                     </span>
                     <span className="text-xs text-muted-foreground shrink-0">
                       {getSystemDisplayTypeLabel(candidate.display_type)}
@@ -145,7 +149,7 @@ export function StudioSystemStage({
         <div className="flex-1 min-w-0 overflow-y-auto">
           {!systemId || !system ? (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              选择一个体系开始检查。
+              {t('studio.stage.system.selectPrompt')}
             </div>
           ) : (
             <div className="mx-auto flex max-w-5xl flex-col gap-4 px-8 py-8">
@@ -157,7 +161,7 @@ export function StudioSystemStage({
                         value={system.name}
                         onSave={(value) => updateSystem.mutate({ systemId: system.id, data: { name: value } })}
                         className="text-xl font-semibold text-foreground"
-                        placeholder="体系名称"
+                        placeholder={LABELS.PH_SYSTEM_NAME}
                       />
                       <VisibilityDot
                         visibility={system.visibility}
@@ -174,12 +178,12 @@ export function StudioSystemStage({
                             : 'text-[hsl(var(--color-status-confirmed))]',
                         )}
                       >
-                        {system.status === 'draft' ? '● draft' : '✓ confirmed'}
+                        {system.status === 'draft' ? `● ${t('worldModel.common.statusDraft')}` : `✓ ${t('worldModel.common.statusConfirmed')}`}
                       </span>
                     </div>
 
                     <div className="text-sm text-muted-foreground">
-                      {getSystemStructureSummary(system)}
+                      {getSystemStructureSummary(system, t)}
                     </div>
                   </div>
 
@@ -189,19 +193,19 @@ export function StudioSystemStage({
                       variant="accentOutline"
                       className="rounded-[10px] px-4 py-2 text-sm font-medium"
                     >
-                      确认体系
+                      {t('studio.stage.system.confirm')}
                     </NwButton>
                   ) : null}
                 </div>
 
                 <div className="rounded-xl border border-[var(--nw-glass-border)] bg-[hsl(var(--background)/0.28)] px-4 py-3 text-xs text-muted-foreground">
-                  Studio 只处理体系的轻量检查与元信息编辑；约束、层级/时间线/列表结构等深度编辑请转到 Atlas。
+                  {t('studio.stage.system.help')}
                 </div>
               </div>
 
               <div className="rounded-2xl border border-[var(--nw-glass-border)] bg-[var(--nw-glass-bg)] backdrop-blur-2xl p-5">
                 <div className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground">
-                  描述
+                  {t('studio.stage.system.descriptionSection')}
                 </div>
                 <InlineEdit
                   value={system.description}
@@ -209,7 +213,7 @@ export function StudioSystemStage({
                   multiline
                   variant="transparent"
                   className="text-sm text-foreground"
-                  placeholder="描述"
+                  placeholder={t('worldModel.common.description')}
                 />
               </div>
             </div>

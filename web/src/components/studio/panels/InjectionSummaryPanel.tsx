@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { X, Box, Users, GitBranch, ExternalLink } from 'lucide-react'
+import { useUiLocale } from '@/contexts/UiLocaleContext'
 import { cn } from '@/lib/utils'
 import type { ContinueDebugSummary } from '@/types/api'
 import {
@@ -8,12 +9,6 @@ import {
 } from '@/lib/injectionSummaryNavigation'
 
 type Category = InjectionSummaryCategory
-
-const categories: { key: Category; label: string; icon: typeof Box; tab: string }[] = [
-  { key: 'entities', label: '实体', icon: Users, tab: 'entities' },
-  { key: 'relationships', label: '关系', icon: GitBranch, tab: 'relationships' },
-  { key: 'systems', label: '体系', icon: Box, tab: 'systems' },
-]
 
 interface InjectionSummaryPanelProps {
   debug: ContinueDebugSummary
@@ -32,8 +27,14 @@ export function InjectionSummaryPanel({
   activeCategory,
   onActiveCategoryChange,
 }: InjectionSummaryPanelProps) {
+  const { t } = useUiLocale()
   const [localCategory, setLocalCategory] = useState<Category>(() => pickInitialInjectionSummaryCategory(debug))
   const effectiveCategory = activeCategory ?? localCategory
+  const categories: { key: Category; label: string; icon: typeof Box; tab: string }[] = useMemo(() => ([
+    { key: 'entities', label: t('worldModel.common.entities'), icon: Users, tab: 'entities' },
+    { key: 'relationships', label: t('worldModel.common.relationships'), icon: GitBranch, tab: 'relationships' },
+    { key: 'systems', label: t('worldModel.common.systems'), icon: Box, tab: 'systems' },
+  ]), [t])
 
   const itemsMap: Record<Category, string[]> = {
     systems: debug.injected_systems,
@@ -54,7 +55,7 @@ export function InjectionSummaryPanel({
               Injection Summary
             </div>
             <div className="mt-1 text-sm font-medium text-foreground">
-              注入摘要 · {totalCount} 个元素
+              {t('studio.injectionSummary.title', { count: totalCount })}
             </div>
           </div>
           <button
@@ -108,7 +109,7 @@ export function InjectionSummaryPanel({
       <div className="flex-1 min-h-0 overflow-y-auto nw-scrollbar-thin px-4 py-3">
         {currentItems.length === 0 ? (
           <div className="flex items-center justify-center py-8">
-            <span className="text-xs text-muted-foreground">无注入内容</span>
+            <span className="text-xs text-muted-foreground">{t('studio.injectionSummary.empty')}</span>
           </div>
         ) : (
           <div className="flex flex-col gap-1">
@@ -152,7 +153,7 @@ export function InjectionSummaryPanel({
             className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-[12px] text-muted-foreground hover:text-accent hover:bg-[var(--nw-glass-bg-hover)] transition-colors"
           >
             <ExternalLink size={12} />
-            <span>在 Atlas 中查看全部</span>
+            <span>{t('studio.injectionSummary.openInAtlas')}</span>
           </button>
         </div>
       )}

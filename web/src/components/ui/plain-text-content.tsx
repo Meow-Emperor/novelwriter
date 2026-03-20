@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import * as Popover from '@radix-ui/react-popover'
+import { useUiLocale } from '@/contexts/UiLocaleContext'
 import { cn } from '@/lib/utils'
 
 export type PlainTextSplitMode = 'auto' | 'doubleNewline' | 'newline'
@@ -138,8 +139,8 @@ function AnnotatedSpan({
 export function PlainTextContent({
   isLoading,
   content,
-  loadingLabel = '加载中...',
-  emptyLabel = '暂无内容',
+  loadingLabel,
+  emptyLabel,
   splitMode = 'newline',
   maxWidth,
   className,
@@ -163,10 +164,14 @@ export function PlainTextContent({
   /** Optional text annotations. No annotations = current behavior. */
   annotations?: TextAnnotation[]
 }) {
+  const { t } = useUiLocale()
+  const effectiveLoadingLabel = loadingLabel ?? t('plainText.loading')
+  const effectiveEmptyLabel = emptyLabel ?? t('plainText.empty')
+
   if (isLoading) {
     return (
       <div className={cn('h-full flex items-center justify-center', className)}>
-        <span className="text-sm text-muted-foreground">{loadingLabel}</span>
+        <span className="text-sm text-muted-foreground">{effectiveLoadingLabel}</span>
       </div>
     )
   }
@@ -176,7 +181,7 @@ export function PlainTextContent({
   if (paragraphs.length === 0) {
     return (
       <div className={cn('h-full flex items-center justify-center', className)}>
-        <span className="text-sm text-muted-foreground">{emptyLabel}</span>
+        <span className="text-sm text-muted-foreground">{effectiveEmptyLabel}</span>
       </div>
     )
   }
