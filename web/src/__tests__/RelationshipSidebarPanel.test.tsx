@@ -6,6 +6,7 @@ import { createElement } from 'react'
 import { RelationshipSidebarPanel } from '@/components/atlas/relationships/RelationshipSidebarPanel'
 import { NovelCopilotProvider } from '@/components/novel-copilot/NovelCopilotProvider'
 import { NovelCopilotDrawer } from '@/components/novel-copilot/NovelCopilotDrawer'
+import { UiLocaleProvider } from '@/contexts/UiLocaleContext'
 import { ToastProvider } from '@/components/world-model/shared/Toast'
 
 const mockUseWorldRelationships = vi.fn()
@@ -47,19 +48,23 @@ function renderSection() {
       QueryClientProvider,
       { client: queryClient },
       createElement(
-        ToastProvider,
+        UiLocaleProvider,
         null,
         createElement(
-          NovelCopilotProvider,
-          { novelId: 1, interactionLocale: 'zh' },
-          createElement(RelationshipSidebarPanel, {
-            novelId: 1,
-            selectedEntityId: 101,
-            selectedEntityName: '苏瑶',
-            onRequestNewRelationship: vi.fn(),
-            onOpenDraftReview: vi.fn(),
-          }),
-          createElement(NovelCopilotDrawer, { novelId: 1 }),
+          ToastProvider,
+          null,
+          createElement(
+            NovelCopilotProvider,
+            { novelId: 1, interactionLocale: 'zh' },
+            createElement(RelationshipSidebarPanel, {
+              novelId: 1,
+              selectedEntityId: 101,
+              selectedEntityName: '苏瑶',
+              onRequestNewRelationship: vi.fn(),
+              onOpenDraftReview: vi.fn(),
+            }),
+            createElement(NovelCopilotDrawer, { novelId: 1 }),
+          ),
         ),
       ),
     ),
