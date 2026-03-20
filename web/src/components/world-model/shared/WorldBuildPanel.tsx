@@ -1,3 +1,4 @@
+import '@/lib/uiMessagePacks/novel'
 import { NovelCopilotCard } from '@/components/novel-copilot/NovelCopilotCard'
 import { NovelCopilotDrawer } from '@/components/novel-copilot/NovelCopilotDrawer'
 import { useOptionalNovelCopilot } from '@/components/novel-copilot/NovelCopilotContext'

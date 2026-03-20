@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import '@/lib/uiMessagePacks/novel'
 import { InlineEdit } from '@/components/world-model/shared/InlineEdit'
 import { VisibilityDot } from '@/components/world-model/shared/VisibilityDot'
 import { ConstraintsPanel } from '@/components/world-model/systems/ConstraintsPanel'

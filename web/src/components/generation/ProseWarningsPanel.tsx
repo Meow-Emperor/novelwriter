@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { useState } from 'react'
+import '@/lib/uiMessagePacks/novel'
 import { AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { renderWarningMessage } from '@/lib/warningMessages'

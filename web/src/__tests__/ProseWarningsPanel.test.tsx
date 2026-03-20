@@ -1,17 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { ProseWarningsPanel } from '@/components/generation/ProseWarningsPanel'
 import { UiLocaleProvider } from '@/contexts/UiLocaleContext'
+import { ProseWarningsPanel } from '@/components/generation/ProseWarningsPanel'
 import type { ProseWarning } from '@/types/api'
+
+function renderPanel(warnings: ProseWarning[]) {
+  return render(
+    <UiLocaleProvider>
+      <ProseWarningsPanel warnings={warnings} />
+    </UiLocaleProvider>,
+  )
+}
 
 describe('ProseWarningsPanel', () => {
   it('stays hidden when there are no warnings', () => {
-    const { container } = render(
-      <UiLocaleProvider>
-        <ProseWarningsPanel warnings={[]} />
-      </UiLocaleProvider>,
-    )
+    const { container } = renderPanel([])
     expect(container).toBeEmptyDOMElement()
   })
 
@@ -44,11 +48,7 @@ describe('ProseWarningsPanel', () => {
       },
     ]
 
-    render(
-      <UiLocaleProvider>
-        <ProseWarningsPanel warnings={warnings} />
-      </UiLocaleProvider>,
-    )
+    renderPanel(warnings)
 
     expect(screen.getByRole('button', { name: '文本质量检查（3 项提示）' })).toBeInTheDocument()
     expect(screen.queryByText('检测到重复短语“雾气翻涌”（出现 3 次）')).not.toBeInTheDocument()

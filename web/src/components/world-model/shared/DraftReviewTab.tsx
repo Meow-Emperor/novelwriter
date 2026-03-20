@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import '@/lib/uiMessagePacks/novel'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'

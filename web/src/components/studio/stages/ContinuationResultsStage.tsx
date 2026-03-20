@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import '@/lib/uiMessagePacks/novel'
 import { Check, RefreshCw, Upload, Info, ChevronDown, ChevronRight, Loader2, Settings, MessageSquarePlus } from 'lucide-react'
 import { NwButton } from '@/components/ui/nw-button'
 import { PlainTextContent, type TextAnnotation } from '@/components/ui/plain-text-content'
@@ -49,7 +50,7 @@ export function ContinuationResultsStage({
   const navigate = useNavigate()
   const location = useLocation()
   const { user, refreshQuota } = useAuth()
-  const { t } = useUiLocale()
+  const { locale, t } = useUiLocale()
   const state = location.state as {
     streamParams?: ContinueRequest
     novelId?: number
@@ -258,7 +259,7 @@ export function ContinuationResultsStage({
           setIsQuotaExhausted(true)
           setStreamError(t('continuation.results.quotaExhausted'))
         } else if (err instanceof ApiError) {
-          const llmMessage = getLlmApiErrorMessage(err)
+          const llmMessage = getLlmApiErrorMessage(err, locale)
           if (llmMessage) {
             setStreamError(llmMessage)
           } else if (err.status === 503) {
@@ -277,7 +278,7 @@ export function ContinuationResultsStage({
       abortRef.current = true
       ctrl.abort()
     }
-  }, [activeChapterNum, navigate, streamAttempt, streamCtx, t])
+  }, [activeChapterNum, locale, navigate, streamAttempt, streamCtx, t])
 
   useEffect(() => {
     if (!isReloadMode || !persisted) return

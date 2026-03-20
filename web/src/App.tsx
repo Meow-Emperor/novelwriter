@@ -9,17 +9,17 @@ import { PerformanceModeProvider } from '@/contexts/PerformanceModeContext'
 import { UiLocaleProvider } from '@/contexts/UiLocaleContext'
 import { PageShell } from '@/components/layout/PageShell'
 import { Home } from '@/pages/Home'
-import { LibraryPage } from '@/pages/LibraryPage'
-import { NovelStudioPage } from '@/pages/NovelStudioPage'
-import { GenerationResults } from '@/pages/GenerationResults'
-import { NovelAtlasPage } from '@/pages/NovelAtlasPage'
-import { NovelShell } from '@/components/novel-shell/NovelShell'
 
 const Login = lazy(() => import('@/pages/Login'))
 const Settings = lazy(() => import('@/pages/Settings'))
 const Terms = lazy(() => import('@/pages/Terms'))
 const Privacy = lazy(() => import('@/pages/Privacy'))
 const CopyrightNotice = lazy(() => import('@/pages/CopyrightNotice'))
+const LibraryPage = lazy(() => import('@/pages/LibraryPage').then((module) => ({ default: module.LibraryPage })))
+const NovelStudioPage = lazy(() => import('@/pages/NovelStudioPage').then((module) => ({ default: module.NovelStudioPage })))
+const GenerationResults = lazy(() => import('@/pages/GenerationResults').then((module) => ({ default: module.GenerationResults })))
+const NovelAtlasPage = lazy(() => import('@/pages/NovelAtlasPage').then((module) => ({ default: module.NovelAtlasPage })))
+const NovelShell = lazy(() => import('@/components/novel-shell/NovelShell').then((module) => ({ default: module.NovelShell })))
 
 const queryClient = new QueryClient()
 

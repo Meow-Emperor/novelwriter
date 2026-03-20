@@ -36,6 +36,10 @@ export function resolveInitialUiLocale(): UiLocale {
   return readStoredUiLocale() ?? readDocumentUiLocale() ?? DEFAULT_UI_LOCALE
 }
 
+export function resolveCurrentUiLocale(): UiLocale {
+  return readDocumentUiLocale() ?? readStoredUiLocale() ?? DEFAULT_UI_LOCALE
+}
+
 export function persistUiLocale(locale: UiLocale): void {
   if (typeof window === 'undefined') return
   try {

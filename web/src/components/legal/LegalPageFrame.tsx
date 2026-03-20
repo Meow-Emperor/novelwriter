@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import '@/lib/uiMessagePacks/legal'
 import { GlassCard } from '@/components/GlassCard'
 import { SiteFooter } from '@/components/layout/SiteFooter'
 

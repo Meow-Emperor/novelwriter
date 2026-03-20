@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import '@/lib/uiMessagePacks/novel'
 import { cn } from '@/lib/utils'
 import { getLlmApiErrorMessage } from '@/lib/llmErrorMessages'
 import { ApiError } from '@/services/api'
@@ -60,7 +61,7 @@ export function WorldGenerationDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const { t } = useUiLocale()
+  const { locale, t } = useUiLocale()
   const navigate = useNavigate()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -100,17 +101,13 @@ export function WorldGenerationDialog({
         },
         onError: (err) => {
           if (err instanceof ApiError) {
-            const llmMessage = getLlmApiErrorMessage(err)
+            const llmMessage = getLlmApiErrorMessage(err, locale)
             if (llmMessage) {
               setGenError(llmMessage)
               return
             }
             if (err.status === 422) {
               setGenError(getWorldGenerate422Message(err.detail, t) ?? t('worldModel.generate.inputInvalid'))
-              return
-            }
-            if (err.code === 'world_generate_llm_unavailable') {
-              setGenError(t('worldModel.generate.serviceUnavailable'))
               return
             }
             if (err.code === 'world_generate_llm_schema_invalid') {
@@ -135,7 +132,7 @@ export function WorldGenerationDialog({
     try {
       const parsed = JSON.parse(await file.text()) as unknown
       if (!isWorldpackV1(parsed)) {
-        setImportError(t('worldModel.generate.fileUnsupported'))
+        setImportError(t('worldModel.worldpack.fileUnsupported'))
         return
       }
       importWorldpack.mutate(parsed, {
@@ -143,11 +140,11 @@ export function WorldGenerationDialog({
           onOpenChange(false)
           navigate(`/world/${novelId}`)
         },
-        onError: () => setImportError(t('worldModel.generate.failed')),
+        onError: () => setImportError(t('worldModel.worldpack.failed')),
       })
     } catch (err) {
       console.error(err)
-      setImportError(t('worldModel.generate.fileUnreadable'))
+      setImportError(t('worldModel.worldpack.fileUnreadable'))
     } finally {
       e.target.value = ''
     }

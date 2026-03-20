@@ -6,6 +6,7 @@ import { createElement } from 'react'
 import { UiLocaleProvider } from '@/contexts/UiLocaleContext'
 import { BootstrapPanel } from '@/components/world-model/shared/BootstrapPanel'
 import { ToastProvider } from '@/components/world-model/shared/Toast'
+import { ApiError } from '@/services/api'
 import type { BootstrapJobResponse, WindowIndexState } from '@/types/api'
 
 // Mock the hooks
@@ -144,6 +145,26 @@ describe('BootstrapPanel (sidebar variant)', () => {
     expect(screen.getByText('Extract from chapters')).toBeTruthy()
     expect(screen.getByText('10 entities · 5 relationships')).toBeTruthy()
     expect(screen.getByText('Ready to search clues across the whole book')).toBeTruthy()
+  })
+
+  it('shows English LLM error copy when bootstrap trigger fails in the en locale', async () => {
+    localStorage.setItem('novwr_ui_locale', 'en')
+    document.documentElement.lang = 'en'
+    mutateFn.mockImplementation((_payload, options) => {
+      options?.onError?.(
+        new ApiError(503, 'HTTP 503', {
+          code: 'ai_manually_disabled',
+          detail: { code: 'ai_manually_disabled' },
+        }),
+      )
+    })
+    mockUseBootstrapStatus.mockReturnValue({ data: null, isLoading: false })
+
+    renderPanel()
+
+    await userEvent.click(screen.getByText('Extract from chapters'))
+
+    expect(screen.getByText('AI is disabled on this instance, so model requests are unavailable right now.')).toBeTruthy()
   })
 
   it('calls trigger with initial payload on idle row click', async () => {

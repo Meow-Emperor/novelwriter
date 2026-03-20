@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
+import '@/lib/uiMessagePacks/novel'
 import { useQuery } from '@tanstack/react-query'
 import { MoreHorizontal, Pencil, Trash2, Upload } from 'lucide-react'
 import { ChapterContent } from '@/components/detail/ChapterContent'
@@ -108,7 +109,7 @@ export function NovelStudioPage() {
     studioResultsDebug?: ContinueDebugSummary | null
   } | null
   const novelId = Number(novelIdParam)
-  const { t } = useUiLocale()
+  const { locale, t } = useUiLocale()
   const { routeState } = useNovelShell()
   const { isOpen: isWorkbenchOpen, focusedSessionId, openDrawer } = useNovelCopilot()
   const activeStage = routeState.stage ?? 'chapter'
@@ -629,7 +630,7 @@ export function NovelStudioPage() {
       {
         onError: (err) => {
           if (err instanceof ApiError) {
-            const llmMessage = getLlmApiErrorMessage(err)
+            const llmMessage = getLlmApiErrorMessage(err, locale)
             if (llmMessage) {
               setBootstrapError(llmMessage)
               return

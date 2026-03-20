@@ -3,6 +3,7 @@
 
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
+import '@/lib/uiMessagePacks/novel'
 import { ArrowLeft, Bot } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'

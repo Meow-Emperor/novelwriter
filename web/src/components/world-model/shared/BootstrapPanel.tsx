@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { BookOpen, ChevronRight } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
+import '@/lib/uiMessagePacks/novel'
 import { useBootstrapStatus, useTriggerBootstrap } from '@/hooks/world/useBootstrap'
 import { useNovelWindowIndex } from '@/hooks/novel/useNovelWindowIndex'
 import { worldKeys } from '@/hooks/world/keys'
@@ -88,7 +89,7 @@ export function BootstrapPanel({ novelId, variant = 'sidebar' }: { novelId: numb
     trigger.mutate(payload, {
       onError: (err) => {
         if (err instanceof ApiError) {
-          const llmMessage = getLlmApiErrorMessage(err)
+          const llmMessage = getLlmApiErrorMessage(err, locale)
           if (llmMessage) {
             toast(llmMessage)
             return
