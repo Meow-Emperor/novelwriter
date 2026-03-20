@@ -45,7 +45,6 @@ COPY data/worldpacks/ data/worldpacks/
 
 # Stage 3: Runtime image
 FROM python:3.13-slim
-RUN groupadd -r app && useradd -r -g app -d /app app
 WORKDIR /app
 
 COPY --from=backend-build /app/.venv /app/.venv
@@ -55,8 +54,10 @@ COPY --from=backend-build /app/alembic.ini /app/alembic.ini
 COPY --from=backend-build /app/data /app/data
 COPY --from=frontend-build /web/dist/ /app/static/
 
-RUN mkdir -p /data && chown -R app:app /app /data
-USER app
+# Selfhost defaults to a host bind-mounted /data volume. Keep the runtime user as
+# root so first-run SQLite/bootstrap writes still succeed when the host path is
+# created by an arbitrary UID/GID outside the image.
+RUN mkdir -p /data
 
 ENV DEPLOY_MODE=selfhost
 ENV SCNGS_DATA_DIR=/data

@@ -49,6 +49,25 @@ cleanup() {
 
 trap cleanup EXIT
 
+dump_compose_debug() {
+  local dir="$1"
+  local project_name="${2:-}"
+  local compose_args=("--project-directory" "$dir")
+
+  if [[ -z "$dir" || ! -f "$dir/docker-compose.yml" ]]; then
+    return 0
+  fi
+
+  if [[ -n "$project_name" ]]; then
+    compose_args+=("--project-name" "$project_name")
+  fi
+
+  echo "[selfhost-smoke] docker compose ps ($dir)"
+  docker compose "${compose_args[@]}" ps || true
+  echo "[selfhost-smoke] docker compose logs ($dir)"
+  docker compose "${compose_args[@]}" logs --no-color || true
+}
+
 require_command uv
 require_command curl
 require_command docker
@@ -89,7 +108,10 @@ if [[ ! -x "$NOVWR_BIN" ]]; then
   exit 1
 fi
 
-wait_for_health "http://127.0.0.1:${INSTALL_PORT}/api/health"
+if ! wait_for_health "http://127.0.0.1:${INSTALL_PORT}/api/health"; then
+  dump_compose_debug "$INSTALL_DIR"
+  exit 1
+fi
 "$NOVWR_BIN" doctor --dir "$INSTALL_DIR"
 "$NOVWR_BIN" uninstall --dir "$INSTALL_DIR" --delete-data
 INSTALL_DIR=""
@@ -116,7 +138,10 @@ EOF
 
 docker compose --project-directory "$COMPOSE_DIR" --project-name "$COMPOSE_PROJECT_NAME" config >/dev/null
 docker compose --project-directory "$COMPOSE_DIR" --project-name "$COMPOSE_PROJECT_NAME" up -d
-wait_for_health "http://127.0.0.1:${COMPOSE_PORT}/api/health"
+if ! wait_for_health "http://127.0.0.1:${COMPOSE_PORT}/api/health"; then
+  dump_compose_debug "$COMPOSE_DIR" "$COMPOSE_PROJECT_NAME"
+  exit 1
+fi
 docker compose --project-directory "$COMPOSE_DIR" --project-name "$COMPOSE_PROJECT_NAME" down --remove-orphans -v
 COMPOSE_DIR=""
 COMPOSE_PROJECT_NAME=""

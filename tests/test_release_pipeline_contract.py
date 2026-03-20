@@ -109,6 +109,7 @@ def test_dockerfile_allows_frontend_build_mode_overrides():
     assert "scripts/setup_python_env.sh --no-dev" in dockerfile
     assert "COPY --from=backend-build /app/.venv /app/.venv" in dockerfile
     assert "COPY --from=uv /uv /uvx /bin/" not in dockerfile
+    assert "USER app" not in dockerfile
 
 
 def test_docker_build_context_keeps_demo_seed_assets():
@@ -167,6 +168,8 @@ def test_selfhost_smoke_script_covers_wheel_installer_and_compose_flows():
     assert '"$NOVWR_BIN" doctor --dir "$INSTALL_DIR"' in script
     assert 'cp deploy/selfhost/docker-compose.yml "$COMPOSE_DIR/docker-compose.yml"' in script
     assert 'docker compose --project-directory "$COMPOSE_DIR" --project-name "$COMPOSE_PROJECT_NAME" up -d' in script
+    assert 'dump_compose_debug()' in script
+    assert 'docker compose "${compose_args[@]}" logs --no-color || true' in script
 
 
 def test_playwright_integration_backend_server_uses_uv_wrapper():
