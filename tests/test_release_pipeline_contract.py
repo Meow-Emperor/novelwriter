@@ -33,6 +33,13 @@ def test_mirror_public_workflow_is_reusable_and_still_manual_dispatchable():
     assert "source_ref_name:" in workflow
     assert "Manual public release must be dispatched from master" in workflow
     assert "must point to a commit already merged into master" in workflow
+    assert "Build public GitHub Release notes" in workflow
+    assert "Create or update public GitHub Release" in workflow
+    assert "gh release create" in workflow
+    assert "gh release edit" in workflow
+    assert "--latest" in workflow
+    assert "public-release-applied-commits.md" in workflow
+    assert "公开仓差异对比" in workflow
 
 
 def test_internal_release_pipeline_files_stay_out_of_public_snapshot():
