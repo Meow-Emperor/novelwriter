@@ -114,11 +114,12 @@ describe('WorldBuildPanel', () => {
     mockUseBootstrapStatus.mockReturnValue({ data: null, isLoading: false })
     const { rerender } = renderSection()
 
-    expect(screen.getByText('AI 工具')).toBeTruthy()
-    expect(screen.getByText(/从设定文本生成/)).toBeTruthy()
+    expect(screen.getByText('打开全书研究')).toBeTruthy()
+    expect(screen.getByText('Atlas 世界模型')).toBeTruthy()
+    expect(screen.getByText('从设定生成草稿')).toBeTruthy()
     expect(screen.getByText('从章节提取')).toBeTruthy()
     expect(screen.getByTestId('novel-copilot-trigger')).toBeTruthy()
-    expect(screen.getByText('从全书视角检索设定缺口、潜在线索与值得进一步研究的世界锚点。')).toBeTruthy()
+    expect(screen.getByText('当前世界尚未建立条目')).toBeTruthy()
     expect(screen.getByText('全书内容还在准备中；当前会先参考最近几章。')).toBeTruthy()
 
     // Running

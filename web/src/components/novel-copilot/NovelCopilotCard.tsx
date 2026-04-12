@@ -1,20 +1,83 @@
-import { Sparkles, Bot, Search } from 'lucide-react'
+import { ChevronRight, Globe, Search, Sparkles } from 'lucide-react'
+import { useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { WorldGenerationDialog } from '@/components/world-model/shared/WorldGenerationDialog'
 import { BootstrapPanel } from '@/components/world-model/shared/BootstrapPanel'
-import { useState } from 'react'
 import { useUiLocale } from '@/contexts/UiLocaleContext'
 import { useNovelCopilot } from './NovelCopilotContext'
 import { useOptionalNovelShell } from '@/components/novel-shell/NovelShellContext'
 import { buildWholeBookCopilotLaunchArgs } from './novelCopilotLauncher'
 import { useNovelWindowIndex } from '@/hooks/novel/useNovelWindowIndex'
+import { useWorldEntities } from '@/hooks/world/useEntities'
+import { useWorldRelationships } from '@/hooks/world/useRelationships'
+import { useWorldSystems } from '@/hooks/world/useSystems'
 import { getWindowIndexCopilotStatusMeta } from '@/lib/windowIndexStatus'
 import {
-  copilotHighlightLineClassName,
-  copilotPanelClassName,
-  copilotPillClassName,
-  copilotPillInteractiveClassName,
+  getCopilotResearchStatusClassName,
 } from './novelCopilotChrome'
+import { setAtlasStudioOriginSearchParams } from '@/components/novel-shell/NovelShellRouteState'
+
+function ActionStrip({
+  icon: Icon,
+  title,
+  description,
+  onClick,
+  testId,
+  compact = false,
+  current = false,
+}: {
+  icon: typeof Search
+  title: string
+  description: string
+  onClick?: () => void
+  testId?: string
+  compact?: boolean
+  current?: boolean
+}) {
+  const content = (
+    <>
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-[var(--nw-glass-border)] bg-background/20 text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] font-medium text-foreground">{title}</div>
+        <div className="mt-0.5 text-[11px] leading-4 text-muted-foreground/80">
+          {description}
+        </div>
+      </div>
+      <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground/45', current && 'opacity-0')} />
+    </>
+  )
+
+  if (!onClick) {
+    return (
+      <div
+        className={cn(
+          'flex w-full items-center gap-3 rounded-[14px] border border-[var(--nw-glass-border)] bg-background/20 text-left',
+          compact ? 'px-3 py-2.5' : 'px-3.5 py-3',
+        )}
+        data-testid={testId}
+      >
+        {content}
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex w-full items-center gap-3 rounded-[14px] border border-[var(--nw-glass-border)] bg-background/20 text-left transition-colors hover:bg-[var(--nw-glass-bg-hover)]',
+        compact ? 'px-3 py-2.5' : 'px-3.5 py-3',
+      )}
+      data-testid={testId}
+    >
+      {content}
+    </button>
+  )
+}
 
 export function NovelCopilotCard({
   novelId,
@@ -27,91 +90,76 @@ export function NovelCopilotCard({
 }) {
   const [genOpen, setGenOpen] = useState(false)
   const { t } = useUiLocale()
+  const navigate = useNavigate()
+  const location = useLocation()
   const copilot = useNovelCopilot()
   const shell = useOptionalNovelShell()
   const { data: indexState } = useNovelWindowIndex(novelId)
+  const { data: entities = [] } = useWorldEntities(novelId)
+  const { data: relationships = [] } = useWorldRelationships(novelId)
+  const { data: systems = [] } = useWorldSystems(novelId)
   const compact = variant === 'compact'
   const indexStatusMeta = getWindowIndexCopilotStatusMeta(indexState)
-  const indexStatusClassName = indexStatusMeta.tone === 'warning'
-    ? 'text-[hsl(var(--color-warning))]'
-    : 'text-muted-foreground/72'
+  const atlasSummary = entities.length > 0 || relationships.length > 0 || systems.length > 0
+    ? t('copilot.card.atlasSummary', {
+      entities: entities.length,
+      relationships: relationships.length,
+      systems: systems.length,
+    })
+    : t('copilot.card.atlasSummaryEmpty')
+  const isAtlasSurface = shell?.routeState.surface === 'atlas'
+
+  const handleOpenAtlas = () => {
+    if (isAtlasSurface) return
+
+    const nextSearchParams = setAtlasStudioOriginSearchParams(new URLSearchParams(), shell ? {
+      stage: shell.routeState.stage ?? 'chapter',
+      chapterNum: shell.routeState.chapterNum,
+      entityId: shell.routeState.entityId,
+      systemId: shell.routeState.systemId,
+      reviewKind: shell.routeState.reviewKind,
+      resultsProvenance: null,
+      artifactPanelState: null,
+    } : null)
+    const nextSearch = nextSearchParams.toString()
+    navigate(`/world/${novelId}${nextSearch ? `?${nextSearch}` : ''}`, {
+      state: location.state,
+    })
+  }
 
   return (
-    <div className={cn('space-y-3', className)} data-testid="world-build-panel">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-foreground/78 uppercase">
-          <Bot className="h-3.5 w-3.5" /> {t('copilot.card.aiTools')}
-        </div>
-      </div>
+    <div className={cn('space-y-1.5', className)} data-testid="world-build-panel" data-variant={variant}>
+      <ActionStrip
+        icon={Search}
+        title={t('copilot.card.openWholeBook')}
+        description={indexStatusMeta.text}
+        onClick={() => copilot.openDrawer(...buildWholeBookCopilotLaunchArgs(shell?.routeState))}
+        testId="novel-copilot-trigger"
+        compact={compact}
+      />
 
-      <div className={cn('group relative overflow-hidden rounded-[24px]', copilotPanelClassName)}>
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,var(--nw-copilot-glow-1),transparent_65%)] [mix-blend-mode:var(--nw-copilot-glow-blend)] opacity-[calc(var(--nw-copilot-glow-op)*0.8)] transition-opacity duration-500 group-hover:opacity-[var(--nw-copilot-glow-op)]" />
-        <div className={cn('pointer-events-none absolute inset-x-5 top-0 h-px opacity-80', copilotHighlightLineClassName)} />
+      <ActionStrip
+        icon={Globe}
+        title={t('studio.rail.atlasTitle')}
+        description={atlasSummary}
+        onClick={isAtlasSurface ? undefined : handleOpenAtlas}
+        testId="world-build-open-atlas"
+        compact={compact}
+        current={isAtlasSurface}
+      />
 
-        <div className="divide-y divide-[var(--nw-glass-border)] relative z-10">
-          <div className={cn('bg-gradient-to-r from-transparent to-[hsl(var(--accent)/0.03)]', compact ? 'p-3.5' : 'p-4')}>
-            <div className={cn('flex items-center justify-between gap-3', compact ? 'mb-2.5' : 'mb-3')}>
-              <div>
-                <div className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">{t('copilot.card.workbenchEyebrow')}</div>
-                {!compact ? (
-                  <div className="mt-1 text-[11px] text-muted-foreground/72">
-                    {t('copilot.card.workbenchDescription')}
-                  </div>
-                ) : null}
-                <div className={`mt-1 text-[10px] ${indexStatusClassName}`}>
-                  {indexStatusMeta.text}
-                </div>
-              </div>
-              <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium text-muted-foreground', copilotPillClassName)}>
-                {t('copilot.card.wholeBook')}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => copilot.openDrawer(...buildWholeBookCopilotLaunchArgs(shell?.routeState))}
-              className={cn(
-                'flex w-full items-center gap-3 text-left text-xs text-foreground transition-all',
-                compact ? 'rounded-[16px] px-3 py-2.5' : 'rounded-[18px] px-3.5 py-3',
-                copilotPillInteractiveClassName,
-                'shadow-[0_14px_28px_rgba(15,23,42,0.08)]',
-              )}
-              data-testid="novel-copilot-trigger"
-            >
-              <div className={cn(
-                'flex shrink-0 items-center justify-center bg-[hsl(var(--accent)/0.12)] text-[hsl(var(--accent))] ring-1 ring-[hsl(var(--accent)/0.25)] shadow-[0_4px_12px_rgba(0,0,0,0.08)]',
-                compact ? 'h-9 w-9 rounded-[14px]' : 'h-10 w-10 rounded-2xl',
-              )}>
-                <Search className="h-4 w-4 shrink-0" />
-              </div>
-              <div className="flex-1">
-                <div className="font-semibold text-foreground">Novel Copilot</div>
-                <div className="mt-0.5 text-[10px] text-muted-foreground/80">
-                  {compact ? t('copilot.card.triggerCompactDescription') : t('copilot.card.triggerDescription')}
-                </div>
-              </div>
-            </button>
-          </div>
+      <ActionStrip
+        icon={Sparkles}
+        title={t('copilot.card.generateDrafts')}
+        description={t('copilot.card.generateFromSettingsLong')}
+        onClick={() => setGenOpen(true)}
+        testId="world-build-generate"
+        compact={compact}
+      />
 
-          <div className={compact ? 'p-3.5' : 'p-4'}>
-            <div className="mb-2 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">{t('copilot.card.batchOps')}</div>
-            <div className="space-y-1.5">
-              <button
-                type="button"
-                onClick={() => setGenOpen(true)}
-                className={cn(
-                  'flex w-full items-center gap-3 rounded-[16px] px-3 py-2.5 text-left text-xs text-muted-foreground transition-colors',
-                  copilotPillInteractiveClassName,
-                  'hover:text-foreground',
-                )}
-                data-testid="world-build-generate"
-                >
-                <Sparkles className="h-4 w-4 shrink-0 opacity-80 text-[hsl(var(--accent))]" />
-                <span className="flex-1">{compact ? t('copilot.card.generateFromSettings') : t('copilot.card.generateFromSettingsLong')}</span>
-              </button>
-
-              <BootstrapPanel novelId={novelId} variant="sidebar" />
-            </div>
-          </div>
+      <div className={cn(compact ? 'px-2' : 'px-2.5 pt-0.5')}>
+        <div className={cn('rounded-[12px] border border-[var(--nw-glass-border)] bg-background/10', compact ? 'px-1 py-0.5' : 'px-1.5 py-1')}>
+          <BootstrapPanel novelId={novelId} variant="sidebar" />
         </div>
       </div>
 

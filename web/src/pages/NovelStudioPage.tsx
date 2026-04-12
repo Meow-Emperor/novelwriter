@@ -1032,9 +1032,6 @@ export function NovelStudioPage() {
             <NovelShellRail className="w-[360px] shrink-0 flex flex-col min-h-0 h-full rounded-[16px] border border-[var(--nw-glass-border)] bg-[var(--nw-glass-bg)] backdrop-blur-[24px] shadow-[var(--nw-copilot-panel-shadow)] overflow-hidden p-3">
               <StudioAssistantPanel
                 novelId={novelId}
-                activeChapterReference={activeChapterReference}
-                latestChapterReference={latestChapterReference}
-                chapterCount={chaptersMeta.length}
                 contextualCopilotAction={contextualCopilotAction}
               />
             </NovelShellRail>

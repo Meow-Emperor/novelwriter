@@ -40,7 +40,6 @@ export function NovelCopilotSuggestionCard({
       data-status={mode}
     >
       <div className={cn('absolute inset-y-0 left-0 w-1.5 pointer-events-none', isApplied ? 'bg-[hsl(var(--foreground)/0.58)]' : kindMeta.accentClassName)} />
-      <div className="absolute inset-x-0 top-0 h-16 bg-[radial-gradient(circle_at_top_left,hsl(var(--foreground)/0.10),transparent_58%)] opacity-70 pointer-events-none" />
 
       <div className="pl-3">
         <div className="flex items-start justify-between gap-3">

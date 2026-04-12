@@ -264,6 +264,24 @@ describe('NovelCopilotDrawer', () => {
     })
   })
 
+  it('keeps the first whole-book workspace compact until multiple sessions need switching', async () => {
+    const user = userEvent.setup()
+    render(createElement(DrawerHarness))
+
+    await user.click(screen.getByRole('button', { name: 'open-whole-book' }))
+
+    const compactStrip = screen.getByTestId('novel-copilot-session-strip')
+    expect(compactStrip).toHaveAttribute('data-layout', 'compact')
+    expect(within(compactStrip).queryByText('切换查看不会中断后台运行')).toBeNull()
+    expect(screen.getByTestId('novel-copilot-quick-actions')).toHaveAttribute('data-layout', 'compact')
+
+    await user.click(screen.getByRole('button', { name: 'open-current-entity' }))
+
+    const fullStrip = screen.getByTestId('novel-copilot-session-strip')
+    expect(fullStrip).toHaveAttribute('data-layout', 'full')
+    expect(within(fullStrip).getByText('切换查看不会中断后台运行')).toBeTruthy()
+  })
+
   it('reuses the same current-entity session across studio and atlas UI contexts', async () => {
     const user = userEvent.setup()
     render(createElement(DrawerHarness))

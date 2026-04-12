@@ -244,29 +244,19 @@ function ActiveNovelCopilotDrawer({
         />
 
         <div className="absolute inset-0 bg-[var(--nw-copilot-shell-bg)]" />
-        <div className="pointer-events-none absolute inset-0 overflow-hidden [mix-blend-mode:var(--nw-copilot-glow-blend)] opacity-[var(--nw-copilot-glow-op)] z-0">
-          <div className="absolute -right-20 top-0 h-64 w-64 rounded-full bg-[radial-gradient(circle,var(--nw-copilot-glow-1),transparent_68%)]" />
-          <div className="absolute -left-16 bottom-0 h-56 w-56 rounded-full bg-[radial-gradient(circle,var(--nw-copilot-glow-2),transparent_74%)]" />
-          <div className="absolute inset-x-10 top-20 h-24 rounded-full bg-[radial-gradient(circle,var(--nw-copilot-glow-3),transparent_72%)] blur-2xl" />
-        </div>
 
         <div className="relative flex h-full flex-col">
           <div className="shrink-0 border-b border-[var(--nw-copilot-border)] bg-[linear-gradient(180deg,hsl(var(--background)/0.16),transparent)]">
-            <div className="relative flex items-center justify-between gap-4 px-5 py-4">
+            <div className="relative flex items-center justify-between gap-4 px-5 py-3">
               <div className={cn('pointer-events-none absolute inset-x-5 top-0 h-px opacity-80', copilotHighlightLineClassName)} />
               <div className="min-w-0">
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-[20px] text-foreground/82', copilotPanelStrongClassName)}>
-                    <Bot className="h-4.5 w-4.5" />
+                  <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-[18px] text-foreground/82', copilotPanelStrongClassName)}>
+                    <Bot className="h-4 w-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-medium tracking-[0.01em] text-foreground/90">Novel Copilot</h2>
-                      <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] text-muted-foreground/80', copilotPillClassName)}>
-                        Novel Copilot
-                      </span>
-                    </div>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <h2 className="text-sm font-medium tracking-[0.01em] text-foreground/90">Novel Copilot</h2>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
                       <AiStatusPill status={focusedStatus} />
                       <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] text-muted-foreground/80', copilotPillClassName)}>
                         {scopeLabel}
@@ -275,7 +265,7 @@ function ActiveNovelCopilotDrawer({
                         {t('copilot.drawer.sessionsCount', { count: sessions.length })}
                       </span>
                     </div>
-                    <div className="mt-2 truncate text-[11px] text-muted-foreground/70">
+                    <div className="mt-1.5 truncate text-[11px] text-muted-foreground/70">
                       {t('copilot.drawer.currentWorkspace', { title: session.displayTitle })}
                     </div>
                   </div>
@@ -302,29 +292,21 @@ function ActiveNovelCopilotDrawer({
             onRemoveSession={removeSession}
           />
 
-          <div className="nw-scrollbar-thin flex-1 overflow-y-auto px-4 py-5">
+          <div className="nw-scrollbar-thin flex-1 overflow-y-auto px-4 py-4">
             {sessionRuns.length === 0 && (
-              <div className="animate-in space-y-3 fade-in duration-700">
-                <div className={cn('relative overflow-hidden rounded-[24px] px-4 py-4', copilotPanelStrongClassName)}>
-                  <div className="pointer-events-none absolute inset-x-0 top-0 h-14 bg-[radial-gradient(circle_at_top_left,var(--nw-copilot-glow-4),transparent_62%)] [mix-blend-mode:var(--nw-copilot-glow-blend)] opacity-[var(--nw-copilot-glow-op)]" />
-                  <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-[radial-gradient(circle_at_right,var(--nw-copilot-glow-2),transparent_68%)] [mix-blend-mode:var(--nw-copilot-glow-blend)] opacity-[calc(var(--nw-copilot-glow-op)*0.8)]" />
-                  <div className="relative flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground/70">
-                        {workbenchMeta.introEyebrow}
-                      </div>
-                      <div className="mt-1.5 text-sm font-medium text-foreground/90">
-                        {workbenchMeta.introTitle}
-                      </div>
-                    </div>
-                    <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium text-foreground/76', copilotPillClassName)}>
-                      {t('copilot.drawer.workspace')}
-                    </span>
+              <div className="animate-in fade-in duration-700">
+                <div className="px-1">
+                  <div className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground/70">
+                    {workbenchMeta.introEyebrow}
+                  </div>
+                  <div className="mt-1 text-[11px] leading-4 text-muted-foreground/76">
+                    {workbenchMeta.introTitle}
                   </div>
                 </div>
                 <NovelCopilotQuickActions
                   actions={workbenchMeta.quickActions}
                   onAction={handleAction}
+                  compact
                   disabled={isFocusedSessionBusy}
                 />
               </div>

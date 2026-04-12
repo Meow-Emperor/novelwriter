@@ -5,7 +5,6 @@ import type { CopilotRunStatus, NovelCopilotSession } from '@/types/copilot'
 import { getCopilotScopeLabel } from './novelCopilotHelpers'
 import { getCopilotRunStatusMeta } from './novelCopilotView'
 import {
-  copilotHighlightLineClassName,
   copilotPillClassName,
   copilotPillInteractiveClassName,
   copilotSessionActiveClassName,
@@ -28,11 +27,67 @@ export function NovelCopilotSessionStrip({
 }) {
   const { locale, t } = useUiLocale()
   if (sessions.length === 0) return null
+  const isCompactLayout = sessions.length === 1
+
+  if (isCompactLayout) {
+    const session = sessions[0]
+    const isFocused = session.sessionId === focusedSessionId
+    const statusMeta = getCopilotRunStatusMeta(getSessionStatus(session.sessionId), locale)
+
+    return (
+      <div
+        className="shrink-0 border-b border-[var(--nw-copilot-border)] bg-[linear-gradient(180deg,hsl(var(--background)/0.16),transparent)] px-4 py-2.5"
+        data-testid="novel-copilot-session-strip"
+        data-layout="compact"
+      >
+        <div className={cn('flex items-center gap-2 rounded-[20px] p-2', copilotSessionRailClassName)}>
+          <button
+            type="button"
+            onClick={() => onFocusSession(session.sessionId)}
+            className={cn(
+              'min-w-0 flex flex-1 items-center gap-3 rounded-[16px] px-3 py-2 text-left transition-colors duration-200',
+              isFocused ? copilotSessionActiveClassName : copilotSessionInactiveClassName,
+            )}
+            data-testid={`novel-copilot-session-${session.sessionId}`}
+            data-state={isFocused ? 'active' : 'inactive'}
+          >
+            <span className={cn('mt-0.5 h-2 w-2 shrink-0 rounded-full', statusMeta.dotClassName)} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-foreground">
+                {session.displayTitle}
+              </span>
+              <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                <span className="truncate text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/72">
+                  {getCopilotScopeLabel(session.prefill, locale)}
+                </span>
+                <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em]', copilotPillClassName, statusMeta.toneClassName)}>
+                  {statusMeta.label}
+                </span>
+              </span>
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onRemoveSession(session.sessionId)}
+            aria-label={t('copilot.sessionStrip.close')}
+            data-role="close-session"
+            className={cn(
+              'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground/72 transition-colors hover:text-foreground',
+              copilotPillInteractiveClassName,
+            )}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
       className="shrink-0 border-b border-[var(--nw-copilot-border)] bg-[linear-gradient(180deg,hsl(var(--background)/0.16),transparent)] px-4 py-3"
       data-testid="novel-copilot-session-strip"
+      data-layout="full"
     >
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
@@ -57,10 +112,10 @@ export function NovelCopilotSessionStrip({
               <div
                 key={session.sessionId}
                 className={cn(
-                  'group relative min-w-[172px] max-w-[224px] shrink-0 snap-start overflow-hidden rounded-[20px] p-0 text-left transition-all duration-300',
+                  'group relative min-w-[172px] max-w-[224px] shrink-0 snap-start overflow-hidden rounded-[20px] p-0 text-left transition-colors duration-200',
                   isFocused
-                    ? cn(copilotSessionActiveClassName, '-translate-y-0.5')
-                    : cn(copilotSessionInactiveClassName, 'hover:-translate-y-0.5 hover:border-[var(--nw-copilot-border-strong)] hover:[background:var(--nw-copilot-pill-hover-bg)]'),
+                    ? copilotSessionActiveClassName
+                    : cn(copilotSessionInactiveClassName, 'hover:bg-[var(--nw-copilot-pill-hover-bg)]'),
                 )}
                 data-testid={`novel-copilot-session-${session.sessionId}`}
                 data-state={isFocused ? 'active' : 'inactive'}
@@ -70,12 +125,6 @@ export function NovelCopilotSessionStrip({
                   onClick={() => onFocusSession(session.sessionId)}
                   className="block w-full px-3.5 py-3 pr-10 text-left"
                 >
-                  <div className={cn(
-                    'pointer-events-none absolute inset-x-3 top-0 h-px opacity-70',
-                    copilotHighlightLineClassName,
-                    isFocused && 'opacity-95',
-                  )} />
-                  <div className={cn('pointer-events-none absolute inset-x-6 bottom-0 h-px opacity-55', copilotHighlightLineClassName)} />
                   <div className="mb-2 flex items-center gap-1.5">
                     <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', statusMeta.dotClassName)} />
                     <span className="truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/72">
