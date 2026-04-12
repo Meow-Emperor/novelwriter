@@ -58,9 +58,9 @@
 
 <div align="center">
 <br />
-<img src="docs/screenshot.png" alt="NovWr Studio — 以《西游记》为例的创作现场" width="90%" />
+<img src="docs/screenshot.png" alt="NovWr Studio 创作工作台" width="90%" />
 <br />
-<sub>▲ Studio 创作现场实拍 — 左栏章节导航 · 中央沉浸式阅读 · 右侧 AI 续写工具台 · Copilot 随时待命</sub>
+<sub>▲ Studio 创作工作台实拍 — 左栏章节导航 · 中央沉浸式阅读 · 右侧简洁辅助区与研究入口</sub>
 <br /><br />
 </div>
 
